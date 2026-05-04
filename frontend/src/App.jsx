@@ -513,18 +513,19 @@ function App() {
       {/* Sort tabs */}
       {routes.length > 0 && (
         <div className="flex gap-2 mb-6 overflow-x-auto pb-2 [scrollbar-width:none]">
+          <div className="text-[0.7rem] text-gray-600 font-black self-center pr-2 whitespace-nowrap">SORT BY:</div>
           {[
-            { id: 'duration', label: 'Fastest', icon: <Zap size={14} /> },
-            { id: 'departure', label: 'Earliest', icon: <Sunrise size={14} /> },
+            { id: 'duration', label: 'Fastest Route', icon: <Zap size={14} /> },
+            { id: 'departure', label: 'Earliest Departure', icon: <Sunrise size={14} /> },
             { id: 'arrival', label: 'Earliest Arrival', icon: <Sunset size={14} /> },
           ].map(opt => (
             <button
               key={opt.id}
               onClick={() => setSortBy(opt.id)}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-black cursor-pointer whitespace-nowrap transition-all duration-200 border ${
+              className={`flex items-center gap-1.5 px-3.5 py-2 rounded-lg text-[11px] font-black cursor-pointer whitespace-nowrap transition-all duration-200 border ${
                 sortBy === opt.id
-                  ? 'bg-indigo-500/10 border-indigo-500 text-white'
-                  : 'bg-white/[0.02] border-white/[0.05] text-gray-500'
+                  ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300 shadow-[0_0_12px_rgba(99,102,241,0.2)]'
+                  : 'bg-white/[0.03] border-white/[0.08] text-gray-500 hover:border-white/[0.15] hover:text-gray-400'
               }`}
             >
               {opt.icon}{opt.label}
@@ -603,24 +604,24 @@ function JourneyCard({ route, isBest, stationNames }) {
 
         {/* Title row */}
         <div className="flex items-start justify-between gap-4">
-          <div>
-            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-              <span className="text-[0.65rem] text-indigo-500 font-black uppercase tracking-[0.1em]">
-                {isDirect ? 'DIRECT JOURNEY' : `${route.connections} CONNECTION${route.connections > 1 ? 'S' : ''}`}
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-2 flex-wrap">
+              <span className="text-[0.7rem] text-indigo-400 font-black uppercase tracking-[0.1em] bg-indigo-500/10 px-2.5 py-1 rounded-lg border border-indigo-500/20">
+                {isDirect ? '🚂 DIRECT' : `🔄 ${route.connections} HOP${route.connections > 1 ? 'S' : ''}`}
               </span>
               {isBest && isConfirmed && (
-                <span className="text-[0.55rem] bg-emerald-500 text-white px-1.5 py-0.5 rounded font-black">BEST</span>
+                <span className="text-[0.65rem] bg-gradient-to-r from-emerald-500 to-teal-500 text-white px-2.5 py-1 rounded-lg font-black uppercase tracking-[0.05em] shadow-[0_0_12px_rgba(16,185,129,0.3)]">⭐ BEST OPTION</span>
               )}
               {isConfirmed ? (
-                <span className="text-[0.55rem] bg-emerald-500/15 text-emerald-500 px-2 py-0.5 rounded font-black border border-emerald-500/25">✓ SEATS AVAILABLE</span>
+                <span className="text-[0.65rem] bg-emerald-500/20 text-emerald-300 px-2.5 py-1 rounded-lg font-black border border-emerald-500/40 uppercase tracking-[0.05em]">✓ AVAILABLE</span>
               ) : hasWl ? (
-                <span className="text-[0.55rem] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded font-black border border-amber-500/25">⚠ WAITLISTED</span>
+                <span className="text-[0.65rem] bg-amber-500/15 text-amber-300 px-2.5 py-1 rounded-lg font-black border border-amber-500/30 uppercase tracking-[0.05em]">⏳ WAITLIST</span>
               ) : hasDeparted ? (
-                <span className="text-[0.55rem] bg-gray-500/20 text-gray-400 px-2 py-0.5 rounded font-black border border-gray-500/30">DEPARTED</span>
+                <span className="text-[0.65rem] bg-gray-500/20 text-gray-300 px-2.5 py-1 rounded-lg font-black border border-gray-500/30 uppercase tracking-[0.05em]">❌ DEPARTED</span>
               ) : hasNotAvbl ? (
-                <span className="text-[0.55rem] bg-red-500/10 text-red-400 px-2 py-0.5 rounded font-black border border-red-500/20">✕ NOT AVAILABLE</span>
+                <span className="text-[0.65rem] bg-red-500/15 text-red-300 px-2.5 py-1 rounded-lg font-black border border-red-500/30 uppercase tracking-[0.05em]">✕ SOLD OUT</span>
               ) : hasUnknownAvail ? (
-                <span className="text-[0.55rem] bg-gray-500/10 text-gray-400 px-2 py-0.5 rounded font-black border border-gray-500/20">? CHECK IRCTC</span>
+                <span className="text-[0.65rem] bg-gray-500/10 text-gray-300 px-2.5 py-1 rounded-lg font-black border border-gray-500/20 uppercase tracking-[0.05em]">❓ CHECK IRCTC</span>
               ) : null}
             </div>
             <h2 className={`text-sm font-black tracking-tight ${isConfirmed ? 'text-white' : 'text-gray-400'}`}>
@@ -715,12 +716,12 @@ function JourneyCard({ route, isBest, stationNames }) {
                   }
 
                   return (
-                    <div key={j} className={`flex items-center justify-between px-2.5 py-[7px] rounded-lg border ${chipClass}`}>
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] font-black">{av.class_code}</span>
-                        <span className="text-[11px] font-black text-white">{label}</span>
+                    <div key={j} className={`flex items-center justify-between px-3 py-2 rounded-lg border transition-all hover:shadow-[0_0_12px_rgba(99,102,241,0.2)] ${chipClass}`}>
+                      <div className="flex items-center gap-2.5">
+                        <span className="text-[11px] font-black bg-white/10 px-1.5 py-0.5 rounded">{av.class_code}</span>
+                        <span className="text-[11px] font-black">{label}</span>
                       </div>
-                      {av.fare && <span className="text-[11px] font-black text-indigo-400">₹{av.fare}</span>}
+                      {av.fare && <span className="text-[10px] font-black text-indigo-300">₹{av.fare}</span>}
                     </div>
                   );
                 })}
@@ -743,24 +744,48 @@ function JourneyCard({ route, isBest, stationNames }) {
           {open && (
             <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden">
               <div className="py-4 flex flex-col gap-3">
-                {route.legs.map((leg, i) => (
-                  <div key={i} className="p-4 bg-white/[0.02] rounded-xl border border-white/[0.03]">
-                    <div className="flex justify-between mb-2 gap-4 flex-wrap">
-                      <span className="text-white font-black text-sm">
-                        {leg.train_name} <span className="text-indigo-500/80">#{leg.train_number}</span>
-                      </span>
-                      <div className="flex flex-col items-end">
-                        <span className="text-emerald-500 font-black text-sm">{formatTime(new Date(leg.departure_time))} – {formatTime(new Date(leg.arrival_time))}</span>
-                        <span className="text-gray-600 text-[0.6rem] font-black">{leg.date} · GENERAL QUOTA</span>
+                {route.legs.map((leg, i) => {
+                  const legDuration = Math.round((new Date(leg.arrival_time) - new Date(leg.departure_time)) / 60000);
+                  const legHours = Math.floor(legDuration / 60);
+                  const legMins = legDuration % 60;
+                  return (
+                    <div key={i} className="p-4 bg-white/[0.02] rounded-xl border border-white/[0.03] hover:border-indigo-500/20 transition-colors">
+                      <div className="flex justify-between mb-3 gap-4 flex-wrap items-start">
+                        <div>
+                          <div className="text-white font-black text-sm">
+                            {leg.train_name} <span className="text-indigo-500/80 text-xs">#{leg.train_number}</span>
+                          </div>
+                          <div className="text-gray-600 text-[0.6rem] font-black mt-1">{leg.date}</div>
+                        </div>
+                        <div className="flex flex-col items-end">
+                          <div className="text-emerald-500 font-black text-sm">{formatTime(new Date(leg.departure_time))} → {formatTime(new Date(leg.arrival_time))}</div>
+                          <div className="text-indigo-400 text-[0.65rem] font-black mt-0.5">{legHours}h {legMins}m • {leg.duration_minutes} km</div>
+                        </div>
                       </div>
+                      <div className="text-gray-500 text-[0.7rem] font-bold flex items-center gap-2 flex-wrap mb-2">
+                        <span className="text-white">{getStationLabel(leg.from_station, stationNames)}</span>
+                        <ArrowRightCircle size={10} className="text-gray-600" />
+                        <span className="text-white">{getStationLabel(leg.to_station, stationNames)}</span>
+                      </div>
+                      {leg.availability.length > 0 && (
+                        <div className="flex gap-2 flex-wrap pt-2 border-t border-white/[0.05]">
+                          <span className="text-[0.65rem] text-gray-600 font-black w-full">Available Classes:</span>
+                          {leg.availability.slice(0, 4).map((av, j) => {
+                            const st = (av.status || '').toUpperCase();
+                            const isAvbl = (st.includes('AVAILABLE') || st.includes('CURR_AVBL') || st.includes('AVBL')) && !st.includes('NOT');
+                            const isWl = !isAvbl && (st.includes('WAITLIST') || st.includes('WL'));
+                            const isRac = !isAvbl && st.includes('RAC');
+                            let color = 'text-gray-400';
+                            if (isAvbl) color = 'text-emerald-400';
+                            else if (isWl) color = 'text-amber-400';
+                            else if (isRac) color = 'text-indigo-400';
+                            return <span key={j} className={`text-[0.6rem] font-black ${color}`}>{av.class_code}</span>;
+                          })}
+                        </div>
+                      )}
                     </div>
-                    <div className="text-gray-500 text-[0.7rem] font-bold flex items-center gap-2 flex-wrap">
-                      <span className="text-white">{getStationLabel(leg.from_station, stationNames)}</span>
-                      <ArrowRightCircle size={10} />
-                      <span className="text-white">{getStationLabel(leg.to_station, stationNames)}</span>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </motion.div>
           )}
