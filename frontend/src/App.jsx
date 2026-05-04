@@ -309,12 +309,21 @@ function App() {
   };
 
   const sortedRoutes = useMemo(() => {
-    return [...routes].sort((a, b) => {
-      if (sortBy === 'duration') return a.total_duration_minutes - b.total_duration_minutes;
-      if (sortBy === 'departure') return new Date(a.legs[0].departure_time) - new Date(b.legs[0].departure_time);
-      if (sortBy === 'arrival') return new Date(a.legs[a.legs.length - 1].arrival_time) - new Date(b.legs[b.legs.length - 1].arrival_time);
-      return 0;
-    });
+    return routes
+      .filter(route => {
+        return !route.legs.some(l =>
+          l.availability.some(av => {
+            const st = (av.status || '').toUpperCase();
+            return st.includes('TRAIN_DEPARTED') || st.includes('TRAIN DEPARTED');
+          })
+        );
+      })
+      .sort((a, b) => {
+        if (sortBy === 'duration') return a.total_duration_minutes - b.total_duration_minutes;
+        if (sortBy === 'departure') return new Date(a.legs[0].departure_time) - new Date(b.legs[0].departure_time);
+        if (sortBy === 'arrival') return new Date(a.legs[a.legs.length - 1].arrival_time) - new Date(b.legs[b.legs.length - 1].arrival_time);
+        return 0;
+      });
   }, [routes, sortBy]);
 
   return (
@@ -560,10 +569,22 @@ function JourneyCard({ route, isBest, stationNames }) {
       return (st.includes('WL') || st.includes('RAC')) && !st.includes('NOT');
     })
   );
+  const hasNotAvbl = !isConfirmed && route.legs.some(l =>
+    l.availability.some(av => {
+      const st = (av.status || '').toUpperCase();
+      return st.includes('NOT_AVAILABLE') || st.includes('NOT AVAILABLE') || st.includes('REGRET');
+    })
+  );
+  const hasDeparted = !isConfirmed && route.legs.some(l =>
+    l.availability.some(av => {
+      const st = (av.status || '').toUpperCase();
+      return st.includes('TRAIN_DEPARTED') || st.includes('TRAIN DEPARTED');
+    })
+  );
 
-  const cardBorder = isConfirmed ? 'border-emerald-500/15' : hasWl ? 'border-amber-500/15' : 'border-white/[0.05]';
-  const cardBg = isConfirmed && isDirect ? 'bg-indigo-500/[0.05]' : 'bg-white/[0.02]';
-  const leftAccent = isConfirmed ? 'border-l-emerald-500' : hasWl ? 'border-l-amber-500' : 'border-l-gray-600';
+  const cardBorder = isConfirmed ? 'border-emerald-500/15' : hasWl ? 'border-amber-500/15' : hasDeparted ? 'border-gray-500/30' : hasNotAvbl ? 'border-red-500/15' : 'border-white/[0.05]';
+  const cardBg = isConfirmed && isDirect ? 'bg-indigo-500/[0.05]' : hasDeparted ? 'bg-gray-500/[0.05]' : 'bg-white/[0.02]';
+  const leftAccent = isConfirmed ? 'border-l-emerald-500' : hasWl ? 'border-l-amber-500' : hasDeparted ? 'border-l-gray-500' : hasNotAvbl ? 'border-l-red-500' : 'border-l-gray-600';
 
   return (
     <motion.div
@@ -587,6 +608,10 @@ function JourneyCard({ route, isBest, stationNames }) {
                 <span className="text-[0.55rem] bg-emerald-500/15 text-emerald-500 px-2 py-0.5 rounded font-black border border-emerald-500/25">✓ SEATS AVAILABLE</span>
               ) : hasWl ? (
                 <span className="text-[0.55rem] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded font-black border border-amber-500/25">⚠ WAITLISTED</span>
+              ) : hasDeparted ? (
+                <span className="text-[0.55rem] bg-gray-500/20 text-gray-400 px-2 py-0.5 rounded font-black border border-gray-500/30">DEPARTED</span>
+              ) : hasNotAvbl ? (
+                <span className="text-[0.55rem] bg-red-500/10 text-red-400 px-2 py-0.5 rounded font-black border border-red-500/20">✕ NOT AVAILABLE</span>
               ) : hasUnknownAvail ? (
                 <span className="text-[0.55rem] bg-gray-500/10 text-gray-400 px-2 py-0.5 rounded font-black border border-gray-500/20">? CHECK IRCTC</span>
               ) : null}
@@ -657,17 +682,30 @@ function JourneyCard({ route, isBest, stationNames }) {
                   const isAvbl = (st.includes('AVAILABLE') || st.includes('CURR_AVBL') || st.includes('AVBL')) && !st.includes('NOT');
                   const isWl   = !isAvbl && (st.includes('WAITLIST') || st.includes('WL') || st.includes('RLWL') || st.includes('PQWL') || st.includes('GNWL'));
                   const isRac  = !isAvbl && st.includes('RAC');
-                  if (!isAvbl && !isWl && !isRac) return null;
+                  const isNotAvbl = st.includes('NOT_AVAILABLE') || st.includes('NOT AVAILABLE') || st.includes('REGRET');
+                  const isDeparted = st.includes('TRAIN_DEPARTED') || st.includes('TRAIN DEPARTED');
+                  
+                  if (!isAvbl && !isWl && !isRac && !isNotAvbl && !isDeparted) return null;
 
-                  const chipClass = isAvbl
-                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
-                    : isWl
-                    ? 'bg-amber-500/[0.08] border-amber-500/20 text-amber-400'
-                    : 'bg-indigo-500/[0.08] border-indigo-500/20 text-indigo-400';
+                  let chipClass = 'bg-gray-500/10 border-gray-500/20 text-gray-400';
+                  let label = 'NOT AVBL';
 
-                  const label = isAvbl
-                    ? (av.available_count != null ? `${av.available_count} seats` : 'AVBL')
-                    : isWl ? `WL ${av.waitlist_number ?? ''}` : `RAC ${av.waitlist_number ?? ''}`;
+                  if (isAvbl) {
+                    chipClass = 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500';
+                    label = av.available_count != null ? `${av.available_count} seats` : 'AVBL';
+                  } else if (isWl) {
+                    chipClass = 'bg-amber-500/[0.08] border-amber-500/20 text-amber-400';
+                    label = `WL ${av.waitlist_number ?? ''}`;
+                  } else if (isRac) {
+                    chipClass = 'bg-indigo-500/[0.08] border-indigo-500/20 text-indigo-400';
+                    label = `RAC ${av.waitlist_number ?? ''}`;
+                  } else if (isDeparted) {
+                    chipClass = 'bg-gray-500/20 border-gray-500/30 text-gray-400';
+                    label = 'DEPARTED';
+                  } else if (isNotAvbl) {
+                    chipClass = 'bg-red-500/10 border-red-500/20 text-red-400';
+                    label = 'NOT AVBL';
+                  }
 
                   return (
                     <div key={j} className={`flex items-center justify-between px-2.5 py-[7px] rounded-lg border ${chipClass}`}>

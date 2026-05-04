@@ -65,7 +65,9 @@ def _parse_status(availability_status: str, availability_type: str) -> tuple[str
     status = "NOT_AVAILABLE"
     
     # 1. Determine Status Category (Check negative statuses FIRST)
-    if any(x in s for x in ["REGRET", "NOT AVAILABLE", "NOT_AVAILABLE", "CANCELLED", "DOES NOT RUN"]):
+    if "DEPARTED" in s:
+        status = "TRAIN_DEPARTED"
+    elif any(x in s for x in ["REGRET", "NOT AVAILABLE", "NOT_AVAILABLE", "CANCELLED", "DOES NOT RUN"]):
         status = "NOT_AVAILABLE"
     elif a_type == "1" or any(x in s for x in ["AVAILABLE", "CURR_AVBL", "AVBL"]):
         status = "AVAILABLE"

@@ -474,15 +474,6 @@ async def get_routes(
                 new_legs.append(leg)
                 continue
 
-            # If every class is NOT_AVAILABLE it could mean "train doesn't serve this leg"
-            # OR "fully booked". Since get_trains_between_stations already confirmed the
-            # train runs this segment, treat it the same as empty results (unknown).
-            if not leg_train_has_service(leg_results):
-                route_availability_unknown = True
-                leg.availability = []
-                new_legs.append(leg)
-                continue
-
             # Train runs this leg — try boarding optimizer if no confirmed seats yet.
             if not leg_has_seats:
                 optimized_results = await try_optimize_boarding(leg)
