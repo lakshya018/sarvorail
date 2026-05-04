@@ -1,12 +1,6 @@
 fastapi
 uvicorn
 pydantic
-pydantic-settings
-playwright
 httpx
 redis
-beautifulsoup4
-lxml
 python-dotenv
-apscheduler
-asyncio
