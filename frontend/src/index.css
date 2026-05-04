@@ -1,0 +1,197 @@
+@import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Plus+Jakarta+Sans:wght@300;400;500;600;700&display=swap');
+
+:root {
+  --bg-color: #030712;
+  --surface-color: #111827;
+  --surface-hover: #1f2937;
+  --primary-color: #6366f1; /* Indigo */
+  --accent-gold: #fbbf24;
+  --success: #10b981;
+  --text-main: #f3f4f6;
+  --text-muted: #9ca3af;
+  --border-color: rgba(255, 255, 255, 0.08);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Plus Jakarta Sans', sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  line-height: 1.5;
+  background-image: 
+    radial-gradient(circle at 0% 0%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
+    radial-gradient(circle at 100% 100%, rgba(251, 191, 36, 0.05) 0%, transparent 40%);
+}
+
+.app-container {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+.brand-font {
+  font-family: 'Playfair Display', serif;
+}
+
+/* Premium Search Bar */
+.search-card {
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 1.5rem;
+  padding: 2rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+  margin-bottom: 3rem;
+}
+
+.input-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.5rem;
+  display: block;
+}
+
+.premium-input {
+  background: rgba(0, 0, 0, 0.2);
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  padding: 0.875rem 1.25rem;
+  color: white;
+  width: 100%;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.premium-input:focus {
+  outline: none;
+  border-color: var(--primary-color);
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.search-btn {
+  background: linear-gradient(135deg, var(--primary-color) 0%, #4f46e5 100%);
+  color: white;
+  border: none;
+  padding: 1rem 2rem;
+  border-radius: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.3s;
+  box-shadow: 0 10px 15px -3px rgba(99, 102, 241, 0.3);
+}
+
+.search-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 20px 25px -5px rgba(99, 102, 241, 0.4);
+}
+
+/* Route Cards */
+.route-card {
+  background: var(--surface-color);
+  border: 1px solid var(--border-color);
+  border-radius: 1.25rem;
+  margin-bottom: 1.5rem;
+  padding: 1.5rem;
+  transition: all 0.3s;
+  position: relative;
+  overflow: hidden;
+}
+
+.route-card:hover {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: var(--surface-hover);
+}
+
+.route-card.best-match {
+  border-color: var(--accent-gold);
+}
+
+.best-badge {
+  position: absolute;
+  top: 0;
+  right: 0;
+  background: var(--accent-gold);
+  color: #000;
+  font-size: 0.65rem;
+  font-weight: 900;
+  padding: 0.25rem 1.5rem;
+  transform: rotate(45deg) translate(1.2rem, -0.2rem);
+  text-transform: uppercase;
+}
+
+.station-time {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+.station-code {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+.duration-pill {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 2rem;
+  padding: 0.25rem 1rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.availability-tag {
+  background: rgba(16, 185, 129, 0.15);
+  color: var(--success);
+  border: 1px solid rgba(16, 185, 129, 0.2);
+  padding: 0.4rem 0.75rem;
+  border-radius: 0.5rem;
+  font-size: 0.75rem;
+  font-weight: 800;
+}
+
+.leg-connector {
+  height: 1px;
+  flex-grow: 1;
+  background: repeating-linear-gradient(90deg, var(--border-color) 0, var(--border-color) 4px, transparent 4px, transparent 8px);
+}
+
+.console-container {
+  background: #000;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  font-family: 'Fira Code', monospace;
+  font-size: 0.7rem;
+  color: #10b981;
+  margin-top: 1.5rem;
+  opacity: 0.8;
+}
+
+/* Custom Date Input Styling */
+input[type="date"].premium-date-input::-webkit-calendar-picker-indicator {
+  filter: invert(1);
+  opacity: 0.6;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  padding: 5px;
+  border-radius: 6px;
+}
+
+input[type="date"].premium-date-input::-webkit-calendar-picker-indicator:hover {
+  opacity: 1;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+input[type="date"].premium-date-input::-webkit-datetime-edit-fields-wrapper {
+  letter-spacing: 0.05em;
+  color: #f3f4f6;
+}
