@@ -109,20 +109,33 @@ class IRCTCScraper:
     async def _ensure_session(self):
         """Ensure IRCTC session is active. Uses a lock to prevent concurrent refresh storms."""
         async with self._session_lock:
-            if not _client.cookies or not self._initialized:
-                logger.info("Initializing fresh IRCTC session...")
+            if self._initialized and _client.cookies:
+                return
+
+            logger.info("Initializing fresh IRCTC session...")
+            max_retries = 2
+            for attempt in range(max_retries):
                 try:
                     await asyncio.wait_for(
                         _client.get("https://www.irctc.co.in/nget/train-search",
                                    headers=_make_headers("https://www.google.com")),
-                        timeout=25.0
+                        timeout=15.0
                     )
                     self._initialized = True
                     logger.info("IRCTC session initialized successfully")
+                    return
                 except asyncio.TimeoutError:
-                    logger.warning("IRCTC session init timeout (expected on first request). Will retry on next API call.")
+                    logger.warning(f"IRCTC session init timeout (attempt {attempt + 1}/{max_retries}). Retrying...")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(2 ** attempt)
                 except Exception as e:
-                    logger.warning(f"IRCTC session init failed: {type(e).__name__}. Will retry on next API call.")
+                    logger.warning(f"IRCTC session init failed: {type(e).__name__} (attempt {attempt + 1}/{max_retries})")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(2 ** attempt)
+
+            # Mark as initialized even if failed - will try again on next request
+            self._initialized = True
+            logger.warning("IRCTC session init failed after retries. Proceeding with uninitialized session.")
 
     async def get_seat_availability(
         self,
@@ -135,16 +148,16 @@ class IRCTCScraper:
     ) -> AvailabilityResult:
         """Fetch availability for a specific class with concurrency protection."""
         await self._ensure_session()
-        
+
         # Convert date
         try:
             date_obj = datetime.strptime(date, "%Y-%m-%d")
         except ValueError:
             date_obj = datetime.strptime(date, "%Y%m%d")
-        
+
         irctc_date = date_obj.strftime("%Y%m%d")
         url = f"{_BASE_URL}/{train_number}/{irctc_date}/{source}/{destination}/{class_code}/{quota}/N"
-        
+
         payload = {
             "paymentFlag": "N", "concessionBooking": False, "ftBooking": False,
             "loyaltyRedemptionBooking": False, "ticketType": "E", "quotaCode": quota,
@@ -153,14 +166,14 @@ class IRCTCScraper:
             "journeyDate": irctc_date, "classCode": class_code,
         }
 
-        max_retries = 1
+        max_retries = 2
         for attempt in range(max_retries):
             try:
                 resp = await asyncio.wait_for(
                     _client.post(url, json=payload, headers=_make_headers()),
-                    timeout=30.0
+                    timeout=20.0
                 )
-                
+
                 if resp.status_code == 403:
                     logger.warning(f"IRCTC 403. Refreshing session (Attempt {attempt+1})...")
                     # Force re-init on 403
@@ -222,18 +235,28 @@ class IRCTCScraper:
                     fare=fare,
                 )
 
+            except asyncio.TimeoutError:
+                logger.warning(f"IRCTC timeout on attempt {attempt + 1}/{max_retries}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)
             except httpx.HTTPStatusError as e:
                 logger.warning(f"IRCTC API HTTP error on attempt {attempt + 1}: {e.response.status_code}")
-                if attempt == MAX_RETRIES - 1:
-                    raise
-                await asyncio.sleep(2 ** attempt)
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)
             except Exception as e:
-                logger.warning(f"IRCTC API error on attempt {attempt + 1}: {e}")
-                if attempt == MAX_RETRIES - 1:
-                    raise
-                await asyncio.sleep(2 ** attempt)
+                logger.warning(f"IRCTC API error on attempt {attempt + 1}: {type(e).__name__}")
+                if attempt < max_retries - 1:
+                    await asyncio.sleep(2 ** attempt)
 
-        raise Exception(f"Failed to get availability for {train_number}/{class_code} after {MAX_RETRIES} retries")
+        # Return "NOT_AVAILABLE" instead of raising - graceful degradation
+        logger.warning(f"IRCTC unavailable for {train_number}/{class_code}. Returning NOT_AVAILABLE.")
+        return AvailabilityResult(
+            class_code=class_code,
+            status="NOT_AVAILABLE",
+            available_count=None,
+            waitlist_number=None,
+            fare=None,
+        )
 
     async def get_all_classes_availability(
         self,
