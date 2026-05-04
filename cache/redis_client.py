@@ -12,6 +12,8 @@ from config.settings import REDIS_URL
 
 logger = logging.getLogger(__name__)
 
+semaphore = asyncio.Semaphore(3)
+
 # Cache TTL Constants
 # Static data — doesn't change day-to-day (train routes, schedules, station stops)
 TRAINS_BETWEEN_TTL      = 86400        # 24h  — exact date key, guards same-session re-queries
@@ -30,7 +32,7 @@ class CacheClient:
             return 
         
         logger.info(f"Creating Redis connection pool: {id(self)}")
-        
+
         # Strictly limit connections to avoid "max number of clients reached"
         # 5 connections per worker is safe for most managed/free tiers.
         self.redis = from_url(
@@ -45,17 +47,14 @@ class CacheClient:
         )
         
         # Test connection with retries
-        for i in range(3):
+        for i in range(1):
             try:
                 await self.redis.ping()
                 logger.info(f"Connected to Redis successfully (Pool size: 5, Attempt: {i+1}).")
                 return
             except Exception as e:
-                if i == 2:
-                    logger.error(f"Failed to connect to Redis after 3 attempts: {e}")
-                    raise
-                logger.warning(f"Redis connection attempt {i+1} failed: {e}. Retrying in 2s...")
-                await asyncio.sleep(2)
+                logger.error(f"Failed to connect to Redis: {e}")
+                raise
 
     async def disconnect(self):
         if self.redis:
@@ -65,7 +64,8 @@ class CacheClient:
         if not self.redis:
             return None
         try:
-            val = await self.redis.get(key)
+            async with semaphore:
+                val = await self.redis.get(key)
             if val:
                 return json.loads(val)
         except Exception as e:
@@ -77,7 +77,8 @@ class CacheClient:
             return
         try:
             val_str = json.dumps(value)
-            await self.redis.set(key, val_str, ex=ttl_seconds)
+            async with semaphore:
+                await self.redis.set(key, val_str, ex=ttl_seconds)
         except Exception as e:
             logger.error(f"Redis set error for {key}: {e}")
 
@@ -85,7 +86,8 @@ class CacheClient:
         if not self.redis:
             return
         try:
-            await self.redis.delete(key)
+            async with semaphore:
+                await self.redis.delete(key)
         except Exception as e:
             logger.error(f"Redis delete error for {key}: {e}")
 
@@ -93,7 +95,8 @@ class CacheClient:
         if not self.redis:
             return False
         try:
-            return await self.redis.exists(key) > 0
+            async with semaphore:
+                return await self.redis.exists(key) > 0
         except Exception as e:
             logger.error(f"Redis exists error for {key}: {e}")
         return False
@@ -103,7 +106,8 @@ class CacheClient:
         if not self.redis:
             return -2
         try:
-            return await self.redis.ttl(key)
+            async with semaphore:
+                return await self.redis.ttl(key)
         except Exception as e:
             logger.error(f"Redis ttl error for {key}: {e}")
         return -2
@@ -158,10 +162,11 @@ class CacheClient:
         deadline = asyncio.get_event_loop().time() + max_wait_seconds
         while True:
             try:
-                result = await self.redis.eval(
-                    lua_script, 1, "irctc:rate_limit",
-                    rate, capacity, time.time()
-                )
+                async with semaphore:
+                    result = await self.redis.eval(
+                        lua_script, 1, "irctc:rate_limit",
+                        rate, capacity, time.time()
+                    )
                 if result == 1:
                     return True
             except Exception as e:

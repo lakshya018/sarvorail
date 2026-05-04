@@ -235,8 +235,8 @@ async def get_routes(
     # Step 2: Get candidate intermediate stations (geographically on the way)
     intermediate_stations = get_candidate_stations(source, destination)
     
-    # Step 3: Fan out leg fetches
-    logger.debug(f"Fanning out via {len(intermediate_stations)} junctions...")
+    # Step 3: Fan out leg fetches in batches to control concurrency
+    logger.debug(f"Fanning out via {len(intermediate_stations)} junctions (Batch size: 3)...")
     tasks = []
     for s in start_stations:
         for mid in intermediate_stations:
@@ -245,8 +245,14 @@ async def get_routes(
     for mid in intermediate_stations:
         for e in end_stations:
             tasks.append(get_trains_cached(mid, e, date_str))
-    
-    results = await asyncio.gather(*tasks, return_exceptions=True)
+
+    # Batch processing to prevent connection pool exhaustion
+    results = []
+    batch_size = 3
+    for i in range(0, len(tasks), batch_size):
+        batch = tasks[i:i+batch_size]
+        batch_results = await asyncio.gather(*batch, return_exceptions=True)
+        results.extend(batch_results)
     
     all_trains = list(direct_trains)
     for res in results:
@@ -292,10 +298,7 @@ async def get_routes(
             if key not in unique_legs_map:
                 unique_legs_map[key] = leg
 
-    # Per-worker limit on simultaneous live IRCTC calls.
-    # This is intentionally small — Redis locks (below) prevent duplicate fetches
-    # across workers, so the effective global rate is workers × this number.
-    _irctc_semaphore = asyncio.Semaphore(5)
+
 
     _ALL_CLASSES = ["SL", "3A", "3E", "2A", "1A", "CC", "EC", "2S"]
     # How many seconds before TTL expiry we proactively refresh in the background.
@@ -343,11 +346,10 @@ async def get_routes(
                 # Rate limit exhausted — return None; caller handles degradation
                 return None
 
-            async with _irctc_semaphore:
-                try:
-                    avail = await irctc_scraper.get_seat_availability(
-                        train_number, from_stn, to_stn, date, cls, quota=quota_code
-                    )
+            try:
+                avail = await irctc_scraper.get_seat_availability(
+                    train_number, from_stn, to_stn, date, cls, quota=quota_code
+                )
                     if avail:
                         avail_dict = avail.dict() if hasattr(avail, "dict") else avail
                         await cache_client.set(cache_key, avail_dict, AVAILABILITY_TTL)
@@ -362,15 +364,14 @@ async def get_routes(
         async with cache_client.lock(lock_key, timeout=20, blocking_timeout=0) as acquired:
             if not acquired:
                 return  # Another worker is already refreshing this key
-            async with _irctc_semaphore:
-                try:
-                    avail = await irctc_scraper.get_seat_availability(
-                        train_number, from_stn, to_stn, date, cls, quota=quota_code
-                    )
-                    if avail:
-                        await cache_client.set(cache_key, avail.dict(), AVAILABILITY_TTL)
-                        logger.debug(f"[BG-Refresh] {train_number}/{cls} refreshed silently")
-                except Exception as e:
+            try:
+                avail = await irctc_scraper.get_seat_availability(
+                    train_number, from_stn, to_stn, date, cls, quota=quota_code
+                )
+                if avail:
+                    await cache_client.set(cache_key, avail.dict(), AVAILABILITY_TTL)
+                    logger.debug(f"[BG-Refresh] {train_number}/{cls} refreshed silently")
+            except Exception as e:
                     logger.debug(f"[BG-Refresh] {train_number}/{cls} failed: {e}")
 
     async def _fetch_availability(leg, quota_code: str):
@@ -382,10 +383,16 @@ async def get_routes(
         ])
         return [AvailabilityResult(**r) if isinstance(r, dict) else r for r in results if r]
 
-    # 2. Fetch all unique availabilities in parallel
+    # 2. Fetch all unique availabilities in batches
     unique_keys = list(unique_legs_map.keys())
-    avail_tasks = [_fetch_availability(unique_legs_map[k], quota) for k in unique_keys]
-    avail_results = await asyncio.gather(*avail_tasks, return_exceptions=True)
+    avail_results = []
+    batch_size = 3
+    
+    for i in range(0, len(unique_keys), batch_size):
+        batch_keys = unique_keys[i:i+batch_size]
+        batch_tasks = [_fetch_availability(unique_legs_map[k], quota) for k in batch_keys]
+        batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+        avail_results.extend(batch_results)
     
     avail_lookup = {}
     for key, result in zip(unique_keys, avail_results):

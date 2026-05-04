@@ -11,7 +11,7 @@ import re
 from typing import List, Optional
 from datetime import datetime
 
-from api.models import AvailabilityResult
+from cache.redis_client import semaphore
 from config.settings import MAX_RETRIES
 
 logger = logging.getLogger(__name__)
@@ -112,12 +112,15 @@ class IRCTCScraper:
             if not _client.cookies or not self._initialized:
                 logger.info("Initializing fresh IRCTC session...")
                 try:
-                    await _client.get("https://www.irctc.co.in/nget/train-search", 
-                                    headers=_make_headers("https://www.google.com"),
-                                    timeout=20.0)
+                    async with semaphore:
+                        await asyncio.wait_for(
+                            _client.get("https://www.irctc.co.in/nget/train-search", 
+                                       headers=_make_headers("https://www.google.com")),
+                            timeout=10.0
+                        )
                     self._initialized = True
                 except Exception as e:
-                    logger.error(f"Session initialization failed: {e}")
+                    logger.error(f"Session initialization failed: {str(e)}", exc_info=True)
 
     async def get_seat_availability(
         self,
@@ -148,9 +151,14 @@ class IRCTCScraper:
             "journeyDate": irctc_date, "classCode": class_code,
         }
 
-        for attempt in range(MAX_RETRIES):
+        max_retries = 1
+        for attempt in range(max_retries):
             try:
-                resp = await _client.post(url, json=payload, headers=_make_headers())
+                async with semaphore:
+                    resp = await asyncio.wait_for(
+                        _client.post(url, json=payload, headers=_make_headers()),
+                        timeout=15.0
+                    )
                 
                 if resp.status_code == 403:
                     logger.warning(f"IRCTC 403. Refreshing session (Attempt {attempt+1})...")
