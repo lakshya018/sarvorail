@@ -60,7 +60,7 @@ class RouteGraph:
                     connections=len(path_legs) - 1,
                     is_fully_confirmed=False
                 ))
-                if len(routes) >= 20: break # Cap for performance
+                if len(routes) >= 50: break # Cap for performance
                 continue
 
             if len(path_legs) >= constraints.max_connections + 1:

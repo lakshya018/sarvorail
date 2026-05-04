@@ -111,8 +111,8 @@ async def get_trains_between_stations(source: str, destination: str, date: str) 
                 ))
             return results
         except Exception as e:
-            logger.warning(f"IRCTC trains search failed: {e}", exc_info=True)
-            await asyncio.sleep(0.5)
+            logger.warning(f"IRCTC trains search failed (Attempt {attempt + 1}): {e}")
+            await asyncio.sleep(1.0 * (attempt + 1)) # Simple linear backoff
 
     return []
 
@@ -127,12 +127,12 @@ async def get_train_schedule(train_number: str, date: Optional[str] = None, sour
 
     try:
         await scraper._ensure_session()
-        resp = await _client.get(url, headers=_make_headers(), timeout=30.0)
+        resp = await _client.get(url, headers=_make_headers(), timeout=40.0)
         
         if resp.status_code == 403:
             scraper._initialized = False
             await scraper._ensure_session()
-            resp = await _client.get(url, headers=_make_headers(), timeout=30.0)
+            resp = await _client.get(url, headers=_make_headers(), timeout=40.0)
 
         if resp.status_code != 200: return []
 

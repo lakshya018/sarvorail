@@ -47,7 +47,7 @@ def _make_headers(referer: str = "https://www.irctc.co.in/nget/booking/train-lis
 # Shared client with cookie support
 _client = httpx.AsyncClient(
     headers=_make_headers(), 
-    timeout=20, 
+    timeout=httpx.Timeout(40.0, connect=10.0), 
     follow_redirects=True,
     cookies={"bmirak": "webbm"} # Pre-seed some known values
 )
@@ -114,7 +114,7 @@ class IRCTCScraper:
                 try:
                     await _client.get("https://www.irctc.co.in/nget/train-search", 
                                     headers=_make_headers("https://www.google.com"),
-                                    timeout=10)
+                                    timeout=20.0)
                     self._initialized = True
                 except Exception as e:
                     logger.error(f"Session initialization failed: {e}")

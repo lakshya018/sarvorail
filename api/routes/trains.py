@@ -460,10 +460,18 @@ async def get_routes(
         route_availability_unknown = False
         new_legs = []
 
+        route_is_unusable = False
         for original_leg in original_route.legs:
             leg = original_leg.copy()
             key = (leg.train_number, leg.from_station, leg.to_station, leg.date)
             leg_results = avail_lookup.get(key, [])
+
+            # Check if this leg has ANY service at all (Available, WL, or RAC)
+            # If leg_results is empty (error/rate limit), we assume it might have service to be safe
+            if leg_results and not leg_train_has_service(leg_results):
+                logger.debug(f"🚫 [Filter] Discarding route: {leg.train_number} has no service on {leg.date}")
+                route_is_unusable = True
+                break
 
             leg_has_seats = any(is_valid_status(r) for r in leg_results)
 
@@ -489,7 +497,7 @@ async def get_routes(
 
             new_legs.append(leg)
 
-        if not new_legs:
+        if route_is_unusable or not new_legs:
             continue
 
         route = original_route.copy()
@@ -521,7 +529,12 @@ async def get_routes(
         if (r.legs[0].train_number, r.legs[-1].to_station) not in direct_keys
     ]
     all_routes = final_confirmed + novel_simplified
-    final_routes = sorted(all_routes, key=lambda x: (x.connections, x.total_duration_minutes))
+    # Sort: Confirmed first, then by number of connections, then duration.
+    # Take top 20 to keep the UI clean but meaningful.
+    final_routes = sorted(
+        all_routes, 
+        key=lambda x: (not x.is_fully_confirmed, x.connections, x.total_duration_minutes)
+    )[:20]
 
     total_search_duration = time.perf_counter() - search_start_time
     logger.info(f"Search complete in {total_search_duration:.2f}s — {len(final_routes)} routes found")

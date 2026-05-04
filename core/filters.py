@@ -42,4 +42,4 @@ def get_candidate_stations(source: str, destination: str) -> List[str]:
     if source in ordered: ordered.remove(source)
     if destination in ordered: ordered.remove(destination)
 
-    return ordered[:25]
+    return ordered[:40]
