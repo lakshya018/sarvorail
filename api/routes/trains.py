@@ -68,6 +68,14 @@ async def get_routes(
     only_confirmed: bool = Query(False),
     quota: str = Query("GN")
 ):
+    try:
+        return await asyncio.wait_for(_get_routes_impl(request, source, destination, date, max_duration_hours, max_connections, min_layover_mins, max_layover_mins, classes, departure_after, departure_before, arrival_before, only_confirmed, quota), timeout=60.0)
+    except asyncio.TimeoutError:
+        logger.warning(f"Route search timeout for {source}->{destination}")
+        return []
+
+async def _get_routes_impl(request, source, destination, date, max_duration_hours, max_connections, min_layover_mins, max_layover_mins, classes, departure_after, departure_before, arrival_before, only_confirmed, quota):
+    """Implementation of route search."""
     search_start_time = time.perf_counter()
     date_str = date.strftime("%Y-%m-%d")
 

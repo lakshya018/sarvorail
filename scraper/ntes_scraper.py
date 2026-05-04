@@ -18,6 +18,14 @@ _TRAINS_BETWEEN_URL = "https://www.irctc.co.in/eticketing/protected/mapps1/altAv
 
 async def get_trains_between_stations(source: str, destination: str, date: str) -> List[Train]:
     """Fetch all trains between two stations on a specific date using IRCTC API."""
+    try:
+        return await asyncio.wait_for(_get_trains_impl(source, destination, date), timeout=45.0)
+    except asyncio.TimeoutError:
+        logger.warning(f"Train search timeout for {source}->{destination}")
+        return []
+
+async def _get_trains_impl(source: str, destination: str, date: str) -> List[Train]:
+    """Implementation of train search with retry logic."""
     # Convert YYYY-MM-DD → YYYYMMDD
     try:
         date_obj = datetime.strptime(date, "%Y-%m-%d")
@@ -42,7 +50,7 @@ async def get_trains_between_stations(source: str, destination: str, date: str) 
             headers = _make_headers(referer="https://www.irctc.co.in/nget/train-search")
             resp = await asyncio.wait_for(
                 _client.post(_TRAINS_BETWEEN_URL, json=payload, headers=headers),
-                timeout=35.0
+                timeout=10.0
             )
             
             if resp.status_code == 403:
@@ -121,10 +129,18 @@ async def get_trains_between_stations(source: str, destination: str, date: str) 
 
 async def get_train_schedule(train_number: str, date: Optional[str] = None, source: Optional[str] = "NDLS") -> List[StationStop]:
     """Verified schedule fetcher using dynamic date and starting station."""
+    try:
+        return await asyncio.wait_for(_get_schedule_impl(train_number, date, source), timeout=40.0)
+    except asyncio.TimeoutError:
+        logger.warning(f"Schedule fetch timeout for {train_number}")
+        return []
+
+async def _get_schedule_impl(train_number: str, date: Optional[str], source: Optional[str]) -> List[StationStop]:
+    """Implementation of schedule fetch with retry logic."""
     jrny_date = date.replace("-", "") if date else datetime.now().strftime("%Y%m%d")
     stn_code = source or "NDLS"
     url = f"https://www.irctc.co.in/eticketing/protected/mapps1/trnscheduleenquiry/{train_number}?journeyDate={jrny_date}&startingStationCode={stn_code}"
-    
+
     from scraper.irctc_scraper import IRCTCScraper
     scraper = IRCTCScraper()
 
@@ -132,7 +148,7 @@ async def get_train_schedule(train_number: str, date: Optional[str] = None, sour
         await scraper._ensure_session()
         resp = await asyncio.wait_for(
             _client.get(url, headers=_make_headers()),
-            timeout=30.0
+            timeout=10.0
         )
 
         if resp.status_code == 403:
