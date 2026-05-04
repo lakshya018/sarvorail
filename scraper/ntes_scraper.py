@@ -44,7 +44,7 @@ async def get_trains_between_stations(source: str, destination: str, date: str) 
             async with semaphore:
                 resp = await asyncio.wait_for(
                     _client.post(_TRAINS_BETWEEN_URL, json=payload, headers=headers),
-                    timeout=20.0
+                    timeout=35.0
                 )
             
             if resp.status_code == 403:

@@ -117,7 +117,7 @@ class IRCTCScraper:
                         await asyncio.wait_for(
                             _client.get("https://www.irctc.co.in/nget/train-search", 
                                        headers=_make_headers("https://www.google.com")),
-                            timeout=10.0
+                            timeout=25.0
                         )
                     self._initialized = True
                 except Exception as e:
@@ -158,7 +158,7 @@ class IRCTCScraper:
                 async with semaphore:
                     resp = await asyncio.wait_for(
                         _client.post(url, json=payload, headers=_make_headers()),
-                        timeout=15.0
+                        timeout=30.0
                     )
                 
                 if resp.status_code == 403:
