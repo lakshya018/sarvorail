@@ -1,34 +1,20 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
-import axios from 'axios';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import {
-  Clock,
-  ChevronDown,
-  Navigation,
-  Activity,
   ArrowRightCircle,
-  Train,
-  CheckCircle,
-  AlertCircle,
-  Hash,
-  Ticket,
   SlidersHorizontal,
   MapPin,
   Calendar,
-  Layers,
-  Wind,
   ArrowUpDown,
   Zap,
   Sunrise,
   Sunset,
-  Banknote,
   Train as TrainIcon,
-  Search
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { DayPicker } from 'react-day-picker';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000/api/v1';
 
-// Helper to get full station label
 const getStationLabel = (code, namesMap) => {
   const name = namesMap[code];
   return name ? `${name} (${code})` : code;
@@ -49,7 +35,6 @@ function StationInput({ value, onChange, placeholder, onSelectName, stationNames
   const inputRef = useRef(null);
   const listRef = useRef(null);
 
-  // Sync display label when value is changed externally (e.g. swap button)
   useEffect(() => {
     const name = stationNames[value];
     setInputDisplay(name ? `${name} (${value})` : (value || ''));
@@ -57,11 +42,7 @@ function StationInput({ value, onChange, placeholder, onSelectName, stationNames
 
   const fetchSuggestions = (q) => {
     clearTimeout(debounceRef.current);
-    if (!q || q.length < 2) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
+    if (!q || q.length < 2) { setSuggestions([]); setShowSuggestions(false); return; }
     debounceRef.current = setTimeout(async () => {
       setLoading(true);
       try {
@@ -70,11 +51,8 @@ function StationInput({ value, onChange, placeholder, onSelectName, stationNames
         setSuggestions(data);
         setActiveIndex(-1);
         setShowSuggestions(data.length > 0);
-      } catch {
-        setSuggestions([]);
-      } finally {
-        setLoading(false);
-      }
+      } catch { setSuggestions([]); }
+      finally { setLoading(false); }
     }, 250);
   };
 
@@ -96,116 +74,67 @@ function StationInput({ value, onChange, placeholder, onSelectName, stationNames
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       const next = Math.min(activeIndex + 1, suggestions.length - 1);
-      setActiveIndex(next);
-      scrollActiveIntoView(next);
+      setActiveIndex(next); scrollActiveIntoView(next);
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       const next = Math.max(activeIndex - 1, 0);
-      setActiveIndex(next);
-      scrollActiveIntoView(next);
+      setActiveIndex(next); scrollActiveIntoView(next);
     } else if (e.key === 'Enter' && activeIndex >= 0) {
-      e.preventDefault();
-      handleSelect(suggestions[activeIndex]);
+      e.preventDefault(); handleSelect(suggestions[activeIndex]);
     } else if (e.key === 'Escape') {
-      setShowSuggestions(false);
-      setActiveIndex(-1);
+      setShowSuggestions(false); setActiveIndex(-1);
     }
   };
 
-  const borderColor = isFocused ? 'rgba(99, 102, 241, 0.55)' : 'rgba(255,255,255,0.09)';
-  const boxShadow = isFocused ? '0 0 0 4px rgba(99, 102, 241, 0.1)' : 'none';
-
   return (
-    <div style={{ position: 'relative', width: '100%' }}>
-      {/* Input wrapper — acts as the styled container */}
-      <div style={{
-        position: 'relative',
-        background: 'rgba(255,255,255,0.04)',
-        border: `1.5px solid ${borderColor}`,
-        borderRadius: '14px',
-        boxShadow,
-        transition: 'border-color 0.2s, box-shadow 0.2s',
-      }}>
+    <div className="relative w-full">
+      <div className={`relative bg-white/[0.04] border-[1.5px] rounded-[14px] transition-all duration-200 ${
+        isFocused
+          ? 'border-indigo-500/60 shadow-[0_0_0_4px_rgba(99,102,241,0.1)]'
+          : 'border-white/[0.09]'
+      }`}>
         <MapPin
           size={15}
-          style={{
-            position: 'absolute', left: '13px', top: '50%', transform: 'translateY(-50%)',
-            color: isFocused ? '#6366f1' : '#4b5563',
-            transition: 'color 0.2s', pointerEvents: 'none',
-          }}
+          className={`absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none transition-colors duration-200 ${isFocused ? 'text-indigo-500' : 'text-gray-600'}`}
         />
         <input
           ref={inputRef}
           type="text"
           value={inputDisplay}
-          onChange={(e) => {
-            setInputDisplay(e.target.value);
-            fetchSuggestions(e.target.value);
-          }}
+          onChange={(e) => { setInputDisplay(e.target.value); fetchSuggestions(e.target.value); }}
           onFocus={(e) => {
             setIsFocused(true);
             if (suggestions.length > 0) setShowSuggestions(true);
-            // Select all so user can immediately type a new search
             setTimeout(() => e.target.select(), 0);
           }}
-          onBlur={() => {
-            setIsFocused(false);
-            // Delay so onMouseDown on a suggestion fires first
-            setTimeout(() => setShowSuggestions(false), 150);
-          }}
+          onBlur={() => { setIsFocused(false); setTimeout(() => setShowSuggestions(false), 150); }}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          style={{
-            width: '100%', height: '52px',
-            background: 'transparent', border: 'none', outline: 'none',
-            paddingLeft: '2.25rem',
-            paddingRight: inputDisplay ? '2.25rem' : '0.75rem',
-            color: '#f1f5f9', fontSize: '0.875rem', fontWeight: '600',
-            letterSpacing: '0.01em',
-          }}
+          className="w-full h-10 bg-transparent border-none outline-none pl-8 pr-8 text-slate-100 text-xs font-semibold tracking-wide placeholder:text-gray-600"
         />
 
-        {/* Clear (×) button */}
         {inputDisplay && (
           <button
             type="button"
             onMouseDown={(e) => {
-              e.preventDefault(); // prevent blur before clear
-              setInputDisplay('');
-              onChange('');
-              setSuggestions([]);
-              setShowSuggestions(false);
+              e.preventDefault();
+              setInputDisplay(''); onChange('');
+              setSuggestions([]); setShowSuggestions(false);
               inputRef.current?.focus();
             }}
-            style={{
-              position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
-              background: 'rgba(255,255,255,0.08)', border: 'none', borderRadius: '50%',
-              width: '20px', height: '20px', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', cursor: 'pointer', color: '#6b7280',
-              fontSize: '14px', fontWeight: '400', padding: 0, lineHeight: 1,
-            }}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 w-5 h-5 bg-white/[0.08] border-none rounded-full flex items-center justify-center cursor-pointer text-gray-500"
           >
-            ×
+            <svg width="8" height="8" viewBox="0 0 8 8" fill="none">
+              <path d="M1 1l6 6M7 1L1 7" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
+            </svg>
           </button>
         )}
 
-        {/* Loading spinner */}
         {loading && (
-          <div
-            className="animate-spin"
-            style={{
-              position: 'absolute',
-              right: inputDisplay ? '38px' : '13px',
-              top: '50%', transform: 'translateY(-50%)',
-              width: '13px', height: '13px',
-              border: '2px solid rgba(99,102,241,0.2)',
-              borderTopColor: '#6366f1', borderRadius: '50%',
-            }}
-          />
+          <div className={`absolute top-1/2 -translate-y-1/2 w-[13px] h-[13px] border-2 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin ${inputDisplay ? 'right-[38px]' : 'right-3'}`} />
         )}
       </div>
 
-      {/* Dropdown */}
       <AnimatePresence>
         {showSuggestions && suggestions.length > 0 && (
           <motion.div
@@ -214,36 +143,13 @@ function StationInput({ value, onChange, placeholder, onSelectName, stationNames
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.97 }}
             transition={{ duration: 0.13, ease: 'easeOut' }}
-            style={{
-              position: 'absolute', zIndex: 200, width: '100%',
-              top: 'calc(100% + 6px)',
-              background: 'rgba(10, 12, 24, 0.98)',
-              backdropFilter: 'blur(24px)',
-              border: '1px solid rgba(99, 102, 241, 0.2)',
-              borderRadius: '16px',
-              boxShadow: '0 24px 60px rgba(0,0,0,0.65), inset 0 0 0 1px rgba(255,255,255,0.03)',
-              overflow: 'hidden',
-              maxHeight: '300px', overflowY: 'auto',
-              scrollbarWidth: 'thin', scrollbarColor: 'rgba(99,102,241,0.25) transparent',
-            }}
+            className="absolute z-[200] w-full top-[calc(100%+6px)] bg-[rgba(10,12,24,0.98)] backdrop-blur-2xl border border-indigo-500/20 rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.65),inset_0_0_0_1px_rgba(255,255,255,0.03)] overflow-hidden max-h-[300px] overflow-y-auto [scrollbar-width:thin] [scrollbar-color:rgba(99,102,241,0.25)_transparent]"
           >
-            {/* Sticky header */}
-            <div style={{
-              position: 'sticky', top: 0, zIndex: 1,
-              padding: '9px 14px 8px',
-              background: 'rgba(10, 12, 24, 0.98)',
-              borderBottom: '1px solid rgba(255,255,255,0.05)',
-              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-            }}>
-              <span style={{ fontSize: '9px', color: '#4b5563', fontWeight: '800', letterSpacing: '0.12em', textTransform: 'uppercase' }}>
-                {suggestions.length} stations
-              </span>
-              <span style={{ fontSize: '9px', color: '#1f2937', fontWeight: '700', letterSpacing: '0.04em' }}>
-                ↑↓ · ↵ select · esc
-              </span>
+            <div className="sticky top-0 z-10 px-3.5 py-2 bg-[rgba(10,12,24,0.98)] border-b border-white/[0.05] flex justify-between items-center">
+              <span className="text-[9px] text-gray-600 font-black tracking-[0.12em] uppercase">{suggestions.length} stations</span>
+              <span className="text-[9px] text-gray-800 font-bold tracking-[0.04em]">↑↓ · ↵ select · esc</span>
             </div>
 
-            {/* Suggestion rows */}
             {suggestions.map((s, i) => {
               const isActive = i === activeIndex;
               return (
@@ -252,47 +158,18 @@ function StationInput({ value, onChange, placeholder, onSelectName, stationNames
                   data-idx={i}
                   onMouseDown={() => handleSelect(s)}
                   onMouseEnter={() => setActiveIndex(i)}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: '11px',
-                    padding: '10px 14px',
-                    cursor: 'pointer',
-                    borderLeft: `3px solid ${isActive ? '#6366f1' : 'transparent'}`,
-                    borderBottom: i < suggestions.length - 1 ? '1px solid rgba(255,255,255,0.03)' : 'none',
-                    background: isActive ? 'rgba(99,102,241,0.1)' : 'transparent',
-                    transition: 'background 0.08s',
-                  }}
+                  className={`flex items-center gap-3 px-3.5 py-2.5 cursor-pointer transition-colors duration-75 border-l-[3px] ${
+                    isActive ? 'bg-indigo-500/10 border-l-indigo-500' : 'border-l-transparent'
+                  } ${i < suggestions.length - 1 ? 'border-b border-b-white/[0.03]' : ''}`}
                 >
-                  {/* Station code badge */}
-                  <div style={{
-                    flexShrink: 0,
-                    minWidth: '42px',
-                    padding: '3px 6px',
-                    background: isActive ? 'rgba(99,102,241,0.22)' : 'rgba(255,255,255,0.05)',
-                    border: `1px solid ${isActive ? 'rgba(99,102,241,0.4)' : 'rgba(255,255,255,0.07)'}`,
-                    borderRadius: '6px',
-                    textAlign: 'center',
-                    fontSize: '10px', fontWeight: '900',
-                    color: isActive ? '#a5b4fc' : '#6b7280',
-                    letterSpacing: '0.04em',
-                  }}>
+                  <div className={`shrink-0 min-w-[42px] px-1.5 py-[3px] rounded-[6px] text-center text-[10px] font-black tracking-[0.04em] border ${
+                    isActive ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-300' : 'bg-white/[0.05] border-white/[0.07] text-gray-500'
+                  }`}>
                     {s.station_code}
                   </div>
-
-                  {/* Name + state */}
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{
-                      fontSize: '13px', fontWeight: '600',
-                      color: isActive ? '#f1f5f9' : '#cbd5e1',
-                      overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
-                    }}>
-                      {s.station_name}
-                    </div>
-                    <div style={{
-                      fontSize: '10px', color: '#374151', fontWeight: '700',
-                      marginTop: '1px', letterSpacing: '0.04em', textTransform: 'uppercase',
-                    }}>
-                      {s.state}
-                    </div>
+                  <div className="flex-1 min-w-0">
+                    <div className={`text-[13px] font-semibold truncate ${isActive ? 'text-slate-100' : 'text-slate-300'}`}>{s.station_name}</div>
+                    <div className="text-[10px] text-gray-700 font-bold mt-px tracking-[0.04em] uppercase">{s.state}</div>
                   </div>
                 </div>
               );
@@ -304,14 +181,98 @@ function StationInput({ value, onChange, placeholder, onSelectName, stationNames
   );
 }
 
+function DatePicker({ value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  // Parse YYYY-MM-DD string to Date
+  const selected = value ? new Date(value + 'T00:00:00') : undefined;
+
+  const handleSelect = (day) => {
+    if (!day) return;
+    const yyyy = day.getFullYear();
+    const mm = String(day.getMonth() + 1).padStart(2, '0');
+    const dd = String(day.getDate()).padStart(2, '0');
+    onChange(`${yyyy}-${mm}-${dd}`);
+    setOpen(false);
+  };
+
+  // Close on outside click
+  useEffect(() => {
+    const handler = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, []);
+
+  const display = selected
+    ? selected.toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: 'numeric' })
+    : 'Select date';
+
+  return (
+    <div ref={ref} className="relative w-full">
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className={`w-full h-10 flex items-center gap-2 px-3 bg-white/[0.04] border-[1.5px] rounded-[14px] text-xs font-semibold transition-all duration-200 cursor-pointer ${
+          open ? 'border-indigo-500/60 shadow-[0_0_0_4px_rgba(99,102,241,0.1)]' : 'border-white/[0.09]'
+        } ${selected ? 'text-white' : 'text-gray-500'}`}
+      >
+        <Calendar size={14} className={open ? 'text-indigo-500' : 'text-gray-600'} />
+        {display}
+      </button>
+
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, y: -6, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -6, scale: 0.97 }}
+            transition={{ duration: 0.15, ease: 'easeOut' }}
+            className="absolute z-[300] top-[calc(100%+6px)] left-0 bg-gray-950 border border-white/[0.1] rounded-2xl shadow-[0_24px_60px_rgba(0,0,0,0.7)] p-3"
+          >
+            <DayPicker
+              mode="single"
+              selected={selected}
+              onSelect={handleSelect}
+              disabled={{ before: new Date() }}
+              startMonth={new Date()}
+              endMonth={new Date(new Date().getFullYear() + 2, 11)}
+              classNames={{
+                root: 'text-xs w-[252px]',
+                months: 'flex flex-col',
+                month: 'space-y-2',
+                month_caption: 'flex justify-between items-center px-1 pb-2 border-b border-white/[0.06]',
+                caption_label: 'text-sm font-bold text-white',
+                nav: 'flex items-center gap-1',
+                button_previous: 'w-7 h-7 flex items-center justify-center rounded-lg bg-white/20 text-white hover:bg-indigo-500/50 hover:text-white transition-colors cursor-pointer disabled:bg-white/[0.04] disabled:text-gray-600 disabled:cursor-not-allowed',
+                button_next: 'w-7 h-7 flex items-center justify-center rounded-lg bg-white/20 text-white hover:bg-indigo-500/50 hover:text-white transition-colors cursor-pointer disabled:bg-white/[0.04] disabled:text-gray-600 disabled:cursor-not-allowed',
+                month_grid: 'w-full border-collapse mt-2',
+                weekdays: 'flex',
+                weekday: 'w-9 text-center text-[10px] font-bold text-gray-600 py-1',
+                week: 'flex mt-1',
+                day: 'w-9 h-9 p-0',
+                day_button: 'w-full h-full flex items-center justify-center rounded-lg text-xs font-semibold text-gray-300 hover:bg-white/[0.08] hover:text-white transition-colors cursor-pointer',
+                selected: '[&>button]:!bg-indigo-500 [&>button]:!text-white [&>button]:shadow-[0_0_12px_rgba(99,102,241,0.4)]',
+                today: '[&>button]:text-indigo-400 [&>button]:font-black',
+                disabled: '[&>button]:!text-gray-700 [&>button]:!cursor-not-allowed [&>button]:hover:!bg-transparent',
+                outside: '[&>button]:!text-gray-700',
+              }}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 function App() {
-  const [source, setSource] = useState('KK');
-  const [dest, setDest] = useState('SNGN');
+  const [source, setSource] = useState('');
+  const [dest, setDest] = useState('');
   const [date, setDate] = useState('2026-05-04');
+  const [hasSearched, setHasSearched] = useState(false);
   const [nearby, setNearby] = useState(0);
   const [maxConn, setMaxConn] = useState(2);
   const [minLayover, setMinLayover] = useState(30);
-  const [maxLayover, setMaxLayover] = useState(240);
   const [quota, setQuota] = useState('GN');
   const [showFilters, setShowFilters] = useState(false);
   const [sortBy, setSortBy] = useState('duration');
@@ -322,45 +283,33 @@ function App() {
   const [error, setError] = useState(null);
   const [stationNames, setStationNames] = useState({});
 
-  const updateStationName = (code, name) => {
-    setStationNames(prev => ({ ...prev, [code]: name }));
-  };
+  const updateStationName = (code, name) => setStationNames(prev => ({ ...prev, [code]: name }));
 
-  const handleSwap = () => {
-    setSource(dest);
-    setDest(source);
-  };
+  const handleSwap = () => { setSource(dest); setDest(source); };
 
-  const addLog = (msg) => {
-    setLogs(prev => [`> ${msg}`, ...prev].slice(0, 5));
-  };
+  const addLog = (msg) => setLogs(prev => [`> ${msg}`, ...prev].slice(0, 5));
 
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
-    setLoading(true);
-    setRoutes([]);
-    setLogs([]);
-    setError(null);
-
-    addLog(`Scanning all confirmed channels...`);
-
+    setLoading(true); setRoutes([]); setLogs([]); setError(null); setHasSearched(false);
+    addLog('Scanning all confirmed channels...');
     try {
       const res = await fetch(`${API_BASE}/routes?source=${source}&destination=${dest}&date=${date}&max_connections=${maxConn}&min_layover_mins=${minLayover}&quota=${quota}`);
-      if (!res.ok) throw new Error("Search failed");
+      if (!res.ok) throw new Error('Search failed');
       const data = await res.json();
       setRoutes(data);
+      setHasSearched(true);
       addLog(`Scan complete. Found ${data.length} confirmed routes.`);
     } catch (err) {
       console.error(err);
-      setError("Routing engine is temporarily unavailable.");
+      setError('Routing engine is temporarily unavailable.');
     } finally {
       setLoading(false);
     }
   };
 
   const sortedRoutes = useMemo(() => {
-    const list = [...routes];
-    return list.sort((a, b) => {
+    return [...routes].sort((a, b) => {
       if (sortBy === 'duration') return a.total_duration_minutes - b.total_duration_minutes;
       if (sortBy === 'departure') return new Date(a.legs[0].departure_time) - new Date(b.legs[0].departure_time);
       if (sortBy === 'arrival') return new Date(a.legs[a.legs.length - 1].arrival_time) - new Date(b.legs[b.legs.length - 1].arrival_time);
@@ -369,257 +318,147 @@ function App() {
   }, [routes, sortBy]);
 
   return (
-    <div className="app-container">
-      <header style={{ marginBottom: '2.5rem', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
-          <div style={{ width: '40px', height: '40px', background: 'linear-gradient(135deg, #6366f1, #4f46e5)', borderRadius: '12px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 20px rgba(99, 102, 241, 0.3)' }}>
-            <TrainIcon style={{ color: 'white' }} size={22} />
+    <div className="max-w-4xl mx-auto px-4 py-8 max-[600px]:px-3 max-[600px]:py-4">
+      {/* Header */}
+      <header className="flex items-center justify-between mb-10">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-xl flex items-center justify-center shadow-[0_8px_20px_rgba(99,102,241,0.3)]">
+            <TrainIcon className="text-white" size={22} />
           </div>
-          <h1 className="brand-font" style={{ fontSize: '1.85rem', fontWeight: '900', letterSpacing: '-0.03em' }}>
-            Sarvo<span style={{ color: '#6366f1' }}>Rail</span>
+          <h1 className="font-brand text-2xl font-black tracking-[-0.03em]">
+            Sarvo<span className="text-indigo-500">Rail</span>
           </h1>
         </div>
-        <div style={{ fontSize: '0.7rem', color: '#6b7280', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.2em' }}>
+        <div className="max-[600px]:hidden text-[0.7rem] text-gray-500 font-black uppercase tracking-[0.2em]">
           Indian Route Intelligence
         </div>
       </header>
 
-      <div className="search-card" style={{ marginBottom: '1.5rem' }}>
+      {/* Search card */}
+      <div className="bg-white/[0.04] border border-white/[0.08] rounded-[1.5rem] p-8 max-[600px]:p-5 max-[600px]:rounded-2xl shadow-[0_25px_50px_-12px_rgba(0,0,0,0.5)] mb-6">
         <form onSubmit={handleSearch}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 36px 1fr 160px auto', gap: '0.75rem', alignItems: 'end' }}>
+          {/* 5-col desktop → 3-col tablet → 2-col mobile */}
+          <div className="grid gap-3 items-end grid-cols-[1fr_36px_1fr_160px_auto] max-[900px]:grid-cols-[1fr_36px_1fr] max-[600px]:grid-cols-[1fr_44px] max-[600px]:grid-rows-4">
 
             {/* Origin */}
-            <div>
-              <label className="input-label"><MapPin size={10} style={{ marginRight: '4px' }} /> Origin</label>
-              <StationInput
-                value={source}
-                onChange={setSource}
-                placeholder="City or station code"
-                onSelectName={updateStationName}
-                stationNames={stationNames}
-              />
+            <div className="max-[900px]:[grid-column:1] max-[900px]:[grid-row:1] max-[600px]:[grid-column:1] max-[600px]:[grid-row:1]">
+              <label className="flex items-center gap-1 text-[0.75rem] font-bold text-gray-400 uppercase tracking-[0.1em] mb-2">
+                <MapPin size={10} /> Origin
+              </label>
+              <StationInput value={source} onChange={setSource} placeholder="City or station code" onSelectName={updateStationName} stationNames={stationNames} />
             </div>
 
-            {/* Swap button */}
-            <div style={{ display: 'flex', alignItems: 'flex-end', paddingBottom: '1px' }}>
+            {/* Swap — spans both station rows on mobile */}
+            <div className="flex items-end pb-px max-[900px]:[grid-column:2] max-[900px]:[grid-row:1] max-[600px]:[grid-column:2] max-[600px]:[grid-row:1/3] max-[600px]:items-center max-[600px]:justify-center max-[600px]:pb-0">
               <button
                 type="button"
                 onClick={handleSwap}
                 title="Swap origin and destination"
-                style={{
-                  width: '36px', height: '52px',
-                  background: 'rgba(255,255,255,0.04)',
-                  border: '1.5px solid rgba(255,255,255,0.09)',
-                  borderRadius: '12px',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer', color: '#6b7280',
-                  transition: 'background 0.2s, color 0.2s, border-color 0.2s',
-                }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.background = 'rgba(99,102,241,0.12)';
-                  e.currentTarget.style.color = '#6366f1';
-                  e.currentTarget.style.borderColor = 'rgba(99,102,241,0.35)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-                  e.currentTarget.style.color = '#6b7280';
-                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.09)';
-                }}
+                className="w-9 h-10 bg-white/[0.04] border-[1.5px] border-white/[0.09] rounded-xl flex items-center justify-center cursor-pointer text-gray-500 hover:bg-indigo-500/[0.12] hover:text-indigo-500 hover:border-indigo-500/40 transition-all duration-200"
               >
                 <ArrowUpDown size={15} />
               </button>
             </div>
 
             {/* Destination */}
-            <div>
-              <label className="input-label"><MapPin size={10} style={{ marginRight: '4px' }} /> Destination</label>
-              <StationInput
-                value={dest}
-                onChange={setDest}
-                placeholder="City or station code"
-                onSelectName={updateStationName}
-                stationNames={stationNames}
-              />
+            <div className="max-[900px]:[grid-column:3] max-[900px]:[grid-row:1] max-[600px]:[grid-column:1] max-[600px]:[grid-row:2]">
+              <label className="flex items-center gap-1 text-[0.75rem] font-bold text-gray-400 uppercase tracking-[0.1em] mb-2">
+                <MapPin size={10} /> Destination
+              </label>
+              <StationInput value={dest} onChange={setDest} placeholder="City or station code" onSelectName={updateStationName} stationNames={stationNames} />
             </div>
 
             {/* Date */}
-            <div>
-              <label className="input-label"><Calendar size={10} style={{ marginRight: '4px' }} /> Date</label>
-              <div style={{ position: 'relative' }}>
-                <Calendar 
-                  size={16} 
-                  style={{ 
-                    position: 'absolute', 
-                    left: '14px', 
-                    top: '50%', 
-                    transform: 'translateY(-50%)', 
-                    color: '#6366f1',
-                    pointerEvents: 'none'
-                  }} 
-                />
-                <input
-                  type="date"
-                  className="premium-date-input"
-                  value={date}
-                  onChange={e => setDate(e.target.value)}
-                  style={{
-                    width: '100%', height: '52px',
-                    background: 'rgba(255,255,255,0.04)',
-                    border: '1.5px solid rgba(255,255,255,0.09)',
-                    borderRadius: '14px',
-                    padding: '0 1rem 0 2.5rem', color: '#fff',
-                    fontSize: '0.875rem', fontWeight: '600',
-                    outline: 'none',
-                    transition: 'border-color 0.2s, box-shadow 0.2s',
-                    cursor: 'pointer'
-                  }}
-                  onFocus={e => {
-                    e.target.style.borderColor = 'rgba(99, 102, 241, 0.55)';
-                    e.target.style.boxShadow = '0 0 0 4px rgba(99, 102, 241, 0.1)';
-                  }}
-                  onBlur={e => {
-                    e.target.style.borderColor = 'rgba(255,255,255,0.09)';
-                    e.target.style.boxShadow = 'none';
-                  }}
-                />
-              </div>
+            <div className="max-[900px]:[grid-column:1/3] max-[900px]:[grid-row:2] max-[600px]:[grid-column:1/-1] max-[600px]:[grid-row:3]">
+              <label className="flex items-center gap-1 text-[0.75rem] font-bold text-gray-400 uppercase tracking-[0.1em] mb-2">
+                <Calendar size={10} /> Date
+              </label>
+              <DatePicker value={date} onChange={setDate} />
             </div>
 
             {/* Filters + Search */}
-            <div style={{ display: 'flex', gap: '0.5rem' }}>
+            <div className="flex gap-2 max-[900px]:[grid-column:3] max-[900px]:[grid-row:2] max-[600px]:[grid-column:1/-1] max-[600px]:[grid-row:4]">
               <button
                 type="button"
                 onClick={() => setShowFilters(!showFilters)}
                 title="Filters"
-                style={{
-                  flexShrink: 0,
-                  width: '52px', height: '52px',
-                  borderRadius: '14px',
-                  background: showFilters ? 'rgba(99,102,241,0.2)' : 'rgba(255,255,255,0.04)',
-                  border: showFilters ? '1.5px solid rgba(99,102,241,0.5)' : '1.5px solid rgba(255,255,255,0.09)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  cursor: 'pointer',
-                  color: showFilters ? '#818cf8' : '#6b7280',
-                  transition: 'all 0.2s',
-                }}
+                className={`shrink-0 w-10 h-10 rounded-[14px] flex items-center justify-center cursor-pointer transition-all duration-200 border-[1.5px] ${
+                  showFilters
+                    ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-400'
+                    : 'bg-white/[0.04] border-white/[0.09] text-gray-500'
+                }`}
               >
                 <SlidersHorizontal size={18} />
               </button>
               <button
-                className="search-btn"
+                className="shrink-0 max-[600px]:flex-1 h-10 px-6 bg-gradient-to-br from-indigo-500 to-indigo-600 border-none rounded-[14px] text-white cursor-pointer shadow-[0_4px_15px_rgba(99,102,241,0.35)] flex items-center justify-center gap-2 font-bold tracking-[0.02em] transition-opacity disabled:opacity-70 hover:shadow-[0_8px_25px_rgba(99,102,241,0.45)] hover:-translate-y-px"
                 disabled={loading}
-                style={{
-                  flexShrink: 0,
-                  height: '52px',
-                  padding: '0 1.5rem',
-                  background: 'linear-gradient(135deg, #6366f1, #4f46e5)',
-                  border: 'none', borderRadius: '14px',
-                  color: '#fff', cursor: 'pointer',
-                  boxShadow: '0 4px 15px rgba(99,102,241,0.35)',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px',
-                  transition: 'opacity 0.2s',
-                  opacity: loading ? 0.7 : 1,
-                  fontWeight: '700',
-                  letterSpacing: '0.02em',
-                }}
               >
                 {loading
-                  ? <div className="animate-spin" style={{ width: '16px', height: '16px', border: '2px solid rgba(255,255,255,0.3)', borderTopColor: '#fff', borderRadius: '50%' }} />
-                  : (
-                    <>
-                      <span>Search Trains</span>
-                      <ArrowRightCircle size={16} />
-                    </>
-                  )
+                  ? <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  : <><span>Search Trains</span><ArrowRightCircle size={16} /></>
                 }
               </button>
             </div>
           </div>
 
+          {/* Filter panel */}
           <AnimatePresence>
             {showFilters && (
               <motion.div
                 initial={{ height: 0, opacity: 0 }}
                 animate={{ height: 'auto', opacity: 1 }}
                 exit={{ height: 0, opacity: 0 }}
-                style={{ overflow: 'hidden' }}
+                className="overflow-hidden"
               >
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: '1.5rem', marginTop: '2rem', paddingTop: '2rem', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+                <div className="grid grid-cols-[repeat(auto-fit,minmax(160px,1fr))] gap-6 mt-8 pt-8 border-t border-white/[0.05]">
                   <div>
-                    <label className="input-label">Nearby Radius: <span style={{ color: '#6366f1' }}>{nearby}km</span></label>
-                    <input type="range" min="0" max="100" step="10" value={nearby} onChange={e => setNearby(parseInt(e.target.value))} style={{ width: '100%', accentColor: '#6366f1' }} />
+                    <label className="text-[0.75rem] font-bold text-gray-400 uppercase tracking-[0.1em] mb-2 block">
+                      Nearby Radius: <span className="text-indigo-400">{nearby}km</span>
+                    </label>
+                    <input type="range" min="0" max="100" step="10" value={nearby} onChange={e => setNearby(parseInt(e.target.value))} className="w-full accent-indigo-500" />
                   </div>
                   <div>
-                    <label className="input-label">Max Connections: <span style={{ color: '#6366f1' }}>{maxConn}</span></label>
-                    <div style={{ display: 'flex', gap: '5px' }}>
+                    <label className="text-[0.75rem] font-bold text-gray-400 uppercase tracking-[0.1em] mb-2 block">
+                      Max Connections: <span className="text-indigo-400">{maxConn}</span>
+                    </label>
+                    <div className="flex gap-1.5">
                       {[0, 1, 2].map(v => (
-                        <button
-                          key={v}
-                          type="button"
-                          onClick={() => setMaxConn(v)}
-                          style={{
-                            flex: 1, padding: '8px 4px',
-                            fontSize: '10px', fontWeight: '800', borderRadius: '8px',
-                            background: maxConn === v ? '#6366f1' : 'rgba(255,255,255,0.03)',
-                            border: maxConn === v ? '1px solid #6366f1' : '1px solid rgba(255,255,255,0.06)',
-                            color: maxConn === v ? '#fff' : '#6b7280',
-                            cursor: 'pointer', transition: 'all 0.15s',
-                          }}
-                        >
+                        <button key={v} type="button" onClick={() => setMaxConn(v)}
+                          className={`flex-1 py-2 text-[10px] font-black rounded-lg border transition-all duration-150 ${
+                            maxConn === v ? 'bg-indigo-500 border-indigo-500 text-white' : 'bg-white/[0.03] border-white/[0.06] text-gray-500'
+                          }`}>
                           {v === 0 ? 'DIRECT' : v}
                         </button>
                       ))}
                     </div>
                   </div>
                   <div>
-                    <label className="input-label">
-                      Min Layover: <span style={{ color: '#6366f1' }}>
-                        {minLayover < 60 ? `${minLayover}m` : `${minLayover / 60}h`}
-                      </span>
+                    <label className="text-[0.75rem] font-bold text-gray-400 uppercase tracking-[0.1em] mb-2 block">
+                      Min Layover: <span className="text-indigo-400">{minLayover < 60 ? `${minLayover}m` : `${minLayover / 60}h`}</span>
                     </label>
-                    <div style={{ display: 'flex', gap: '5px' }}>
-                      {[
-                        { value: 30,  label: '30m' },
-                        { value: 60,  label: '1h'  },
-                        { value: 90,  label: '1.5h' },
-                        { value: 120, label: '2h'  },
-                      ].map(opt => (
-                        <button
-                          key={opt.value}
-                          type="button"
-                          onClick={() => setMinLayover(opt.value)}
-                          style={{
-                            flex: 1, padding: '8px 4px',
-                            fontSize: '10px', fontWeight: '800', borderRadius: '8px',
-                            background: minLayover === opt.value ? '#6366f1' : 'rgba(255,255,255,0.03)',
-                            border: minLayover === opt.value ? '1px solid #6366f1' : '1px solid rgba(255,255,255,0.06)',
-                            color: minLayover === opt.value ? '#fff' : '#6b7280',
-                            cursor: 'pointer', transition: 'all 0.15s',
-                          }}
-                        >
+                    <div className="flex gap-1.5">
+                      {[{ value: 30, label: '30m' }, { value: 60, label: '1h' }, { value: 90, label: '1.5h' }, { value: 120, label: '2h' }].map(opt => (
+                        <button key={opt.value} type="button" onClick={() => setMinLayover(opt.value)}
+                          className={`flex-1 py-2 text-[10px] font-black rounded-lg border transition-all duration-150 ${
+                            minLayover === opt.value ? 'bg-indigo-500 border-indigo-500 text-white' : 'bg-white/[0.03] border-white/[0.06] text-gray-500'
+                          }`}>
                           {opt.label}
                         </button>
                       ))}
                     </div>
                   </div>
                   <div>
-                    <label className="input-label">Quota: <span style={{ color: '#6366f1' }}>{quota === 'GN' ? 'General' : quota === 'TQ' ? 'Tatkal' : 'Premium Tatkal'}</span></label>
-                    <div style={{ display: 'flex', gap: '5px' }}>
+                    <label className="text-[0.75rem] font-bold text-gray-400 uppercase tracking-[0.1em] mb-2 block">
+                      Quota: <span className="text-indigo-400">{quota === 'GN' ? 'General' : quota === 'TQ' ? 'Tatkal' : 'Premium Tatkal'}</span>
+                    </label>
+                    <div className="flex gap-1.5">
                       {['GN', 'TQ', 'PT'].map(v => (
-                        <button
-                          key={v}
-                          type="button"
-                          onClick={() => setQuota(v)}
-                          style={{
-                            flex: 1, padding: '8px 4px',
-                            fontSize: '10px', fontWeight: '800', borderRadius: '8px',
-                            background: quota === v ? '#6366f1' : 'rgba(255,255,255,0.03)',
-                            border: quota === v ? '1px solid #6366f1' : '1px solid rgba(255,255,255,0.06)',
-                            color: quota === v ? '#fff' : '#6b7280',
-                            cursor: 'pointer', transition: 'all 0.15s',
-                          }}
-                        >
-                          {v === 'GN' ? 'GENERAL' : v === 'TQ' ? 'TATKAL' : 'PREM. TATKAL'}
+                        <button key={v} type="button" onClick={() => setQuota(v)}
+                          className={`flex-1 py-2 text-[10px] font-black rounded-lg border transition-all duration-150 ${
+                            quota === v ? 'bg-indigo-500 border-indigo-500 text-white' : 'bg-white/[0.03] border-white/[0.06] text-gray-500'
+                          }`}>
+                          {v === 'GN' ? 'GEN' : v === 'TQ' ? 'TKL' : 'PTK'}
                         </button>
                       ))}
                     </div>
@@ -630,61 +469,74 @@ function App() {
           </AnimatePresence>
         </form>
 
+        {/* Console log */}
         {loading && (
-          <div className="console-container" style={{ marginTop: '1.5rem', padding: '1rem', background: 'rgba(0,0,0,0.3)', borderRadius: '10px', border: '1px solid rgba(255,255,255,0.05)', fontSize: '0.7rem', fontFamily: 'monospace', color: '#10b981' }}>
-            {logs.map((log, i) => <div key={i} style={{ marginBottom: '4px' }}>{log}</div>)}
+          <div className="mt-6 p-4 bg-black/30 rounded-xl border border-white/[0.05] text-xs font-mono text-emerald-500">
+            {logs.map((log, i) => <div key={i} className="mb-1">{log}</div>)}
           </div>
         )}
       </div>
 
+      {/* App info — shown only before any search */}
+      {!hasSearched && !loading && (
+        <div className="mb-6 px-1 text-center">
+          <p className="text-sm text-gray-500 leading-relaxed">
+            SarvoRail finds train routes across India — including connections IRCTC won't show you.
+            Enter your origin, destination and date, and we'll search direct as well as multi-train routes with live seat availability.
+          </p>
+          <div className="flex items-center justify-center gap-4 mt-4 text-[11px] text-gray-600 font-semibold">
+            <span>🚆 Direct &amp; connecting routes</span>
+            <span className="w-px h-3 bg-white/10" />
+            <span>💺 Live seat availability</span>
+            <span className="w-px h-3 bg-white/10" />
+            <span>🎫 All quotas supported</span>
+          </div>
+        </div>
+      )}
+
+      {/* Sort tabs */}
       {routes.length > 0 && (
-        <div style={{ display: 'flex', gap: '0.5rem', marginBottom: '1.5rem', overflowX: 'auto', paddingBottom: '0.5rem', scrollbarWidth: 'none' }}>
+        <div className="flex gap-2 mb-6 overflow-x-auto pb-2 [scrollbar-width:none]">
           {[
             { id: 'duration', label: 'Fastest', icon: <Zap size={14} /> },
             { id: 'departure', label: 'Earliest', icon: <Sunrise size={14} /> },
-            { id: 'arrival', label: 'Earliest Arrival', icon: <Sunset size={14} /> }
+            { id: 'arrival', label: 'Earliest Arrival', icon: <Sunset size={14} /> },
           ].map(opt => (
             <button
               key={opt.id}
               onClick={() => setSortBy(opt.id)}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                gap: '6px',
-                padding: '8px 16px',
-                borderRadius: '10px',
-                background: sortBy === opt.id ? 'rgba(99, 102, 241, 0.1)' : 'rgba(255,255,255,0.02)',
-                border: sortBy === opt.id ? '1px solid #6366f1' : '1px solid rgba(255,255,255,0.05)',
-                color: sortBy === opt.id ? '#fff' : '#6b7280',
-                fontSize: '11px',
-                fontWeight: '800',
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                transition: 'all 0.2s ease'
-              }}
+              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-[11px] font-black cursor-pointer whitespace-nowrap transition-all duration-200 border ${
+                sortBy === opt.id
+                  ? 'bg-indigo-500/10 border-indigo-500 text-white'
+                  : 'bg-white/[0.02] border-white/[0.05] text-gray-500'
+              }`}
             >
-              {opt.icon}
-              {opt.label}
+              {opt.icon}{opt.label}
             </button>
           ))}
         </div>
       )}
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
+      {/* Results */}
+      <div className="flex flex-col gap-5">
         {sortedRoutes.map((route, idx) => (
           <JourneyCard key={idx} route={route} isBest={idx === 0} stationNames={stationNames} />
         ))}
 
-        {!loading && routes.length === 0 && !error && (
-          <div style={{ textAlign: 'center', padding: '5rem 2rem', color: '#4b5563', border: '1px dashed rgba(255,255,255,0.05)', borderRadius: '2rem' }}>
-            <div style={{ fontSize: '2rem', marginBottom: '1rem' }}>🚉</div>
-            <div style={{ fontSize: '0.95rem', fontWeight: '800', color: '#6b7280', marginBottom: '0.5rem' }}>No trains found for this route</div>
-            <div style={{ fontSize: '0.75rem', color: '#374151', lineHeight: 1.7 }}>
+        {!loading && hasSearched && routes.length === 0 && !error && (
+          <div className="text-center py-20 px-8 text-gray-600 border border-dashed border-white/[0.05] rounded-[2rem]">
+            <div className="text-2xl mb-4">🚉</div>
+            <div className="text-sm font-black text-gray-500 mb-2">No trains found for this route</div>
+            <div className="text-xs text-gray-700 leading-7">
               This could mean no trains run between these stations on this date,<br />
               or IRCTC rate limiting prevented results from loading.<br />
-              <span style={{ color: '#6366f1', fontWeight: '700' }}>Try: different date · more connections · nearby radius · check IRCTC directly</span>
+              <span className="text-indigo-400 font-bold">Try: different date · more connections · nearby radius · check IRCTC directly</span>
             </div>
           </div>
+        )}
+
+        {error && (
+          <div className="text-center py-10 text-red-400 text-sm font-semibold">{error}</div>
         )}
       </div>
     </div>
@@ -709,136 +561,121 @@ function JourneyCard({ route, isBest, stationNames }) {
     })
   );
 
-  const accentColor = isConfirmed ? '#10b981' : hasWl ? '#f59e0b' : '#6b7280';
+  const cardBorder = isConfirmed ? 'border-emerald-500/15' : hasWl ? 'border-amber-500/15' : 'border-white/[0.05]';
+  const cardBg = isConfirmed && isDirect ? 'bg-indigo-500/[0.05]' : 'bg-white/[0.02]';
+  const leftAccent = isConfirmed ? 'border-l-emerald-500' : hasWl ? 'border-l-amber-500' : 'border-l-gray-600';
 
   return (
     <motion.div
       initial={{ y: 20, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
-      className="route-card"
-      style={{
-        padding: '1.5rem',
-        borderRadius: '20px',
-        border: `1px solid ${isConfirmed ? 'rgba(16,185,129,0.15)' : hasWl ? 'rgba(245,158,11,0.15)' : 'rgba(255,255,255,0.05)'}`,
-        background: isConfirmed
-          ? (isDirect ? 'rgba(99,102,241,0.05)' : 'rgba(255,255,255,0.02)')
-          : 'rgba(255,255,255,0.015)',
-        borderLeft: `4px solid ${isBest && isConfirmed ? '#10b981' : accentColor}`,
-      }}
+      className={`p-6 max-[600px]:p-4 rounded-[20px] max-[600px]:rounded-2xl border border-l-4 transition-colors ${cardBorder} ${cardBg} ${leftAccent}`}
     >
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '1.25rem' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between' }}>
+      <div className="flex flex-col gap-5">
+
+        {/* Title row */}
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '4px', flexWrap: 'wrap' }}>
-              <div style={{ fontSize: '0.65rem', color: '#6366f1', fontWeight: '900', textTransform: 'uppercase', letterSpacing: '0.1em' }}>
+            <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+              <span className="text-[0.65rem] text-indigo-500 font-black uppercase tracking-[0.1em]">
                 {isDirect ? 'DIRECT JOURNEY' : `${route.connections} CONNECTION${route.connections > 1 ? 'S' : ''}`}
-              </div>
+              </span>
               {isBest && isConfirmed && (
-                <span style={{ fontSize: '0.55rem', background: '#10b981', color: '#fff', padding: '2px 6px', borderRadius: '4px', fontWeight: '900' }}>BEST</span>
+                <span className="text-[0.55rem] bg-emerald-500 text-white px-1.5 py-0.5 rounded font-black">BEST</span>
               )}
               {isConfirmed ? (
-                <span style={{ fontSize: '0.55rem', background: 'rgba(16,185,129,0.15)', color: '#10b981', padding: '2px 8px', borderRadius: '4px', fontWeight: '900', border: '1px solid rgba(16,185,129,0.25)' }}>✓ SEATS AVAILABLE</span>
+                <span className="text-[0.55rem] bg-emerald-500/15 text-emerald-500 px-2 py-0.5 rounded font-black border border-emerald-500/25">✓ SEATS AVAILABLE</span>
               ) : hasWl ? (
-                <span style={{ fontSize: '0.55rem', background: 'rgba(245,158,11,0.12)', color: '#f59e0b', padding: '2px 8px', borderRadius: '4px', fontWeight: '900', border: '1px solid rgba(245,158,11,0.25)' }}>⚠ WAITLISTED</span>
+                <span className="text-[0.55rem] bg-amber-500/10 text-amber-400 px-2 py-0.5 rounded font-black border border-amber-500/25">⚠ WAITLISTED</span>
               ) : hasUnknownAvail ? (
-                <span style={{ fontSize: '0.55rem', background: 'rgba(107,114,128,0.12)', color: '#9ca3af', padding: '2px 8px', borderRadius: '4px', fontWeight: '900', border: '1px solid rgba(107,114,128,0.2)' }}>? CHECK IRCTC</span>
+                <span className="text-[0.55rem] bg-gray-500/10 text-gray-400 px-2 py-0.5 rounded font-black border border-gray-500/20">? CHECK IRCTC</span>
               ) : null}
             </div>
-            <h2 style={{ fontSize: '1.2rem', fontWeight: '900', color: isConfirmed ? '#fff' : '#9ca3af', margin: 0, letterSpacing: '-0.01em' }}>
+            <h2 className={`text-sm font-black tracking-tight ${isConfirmed ? 'text-white' : 'text-gray-400'}`}>
               {mainTrainName}
             </h2>
           </div>
-          <div style={{ display: 'flex', gap: '0.5rem' }}>
+          <div className="flex gap-2 shrink-0">
             {route.legs.map((l, i) => (
-              <div key={i} style={{ fontSize: '0.6rem', background: 'rgba(255,255,255,0.05)', color: '#9ca3af', padding: '3px 8px', borderRadius: '6px', fontWeight: '800', border: '1px solid rgba(255,255,255,0.08)' }}>
+              <div key={i} className="text-[0.6rem] bg-white/[0.05] text-gray-400 px-2 py-[3px] rounded-md font-black border border-white/[0.08]">
                 #{l.train_number}
               </div>
             ))}
           </div>
         </div>
 
-        {/* Route Visualization */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem', background: 'rgba(0,0,0,0.25)', padding: '0.6rem 1rem', borderRadius: '10px', width: 'fit-content' }}>
-          <span style={{ fontWeight: '900', fontSize: '0.8rem', color: '#fff' }}>{getStationLabel(route.legs[0].from_station, stationNames)}</span>
+        {/* Station path */}
+        <div className="flex items-center gap-3 bg-black/25 px-4 py-2.5 rounded-xl w-fit flex-wrap">
+          <span className="font-black text-sm text-white">{getStationLabel(route.legs[0].from_station, stationNames)}</span>
           {route.legs.map((leg, i) => (
             <React.Fragment key={i}>
-              <ArrowRightCircle size={10} style={{ color: '#4b5563' }} />
-              <span style={{ fontWeight: '900', fontSize: '0.8rem', color: i === route.legs.length - 1 ? '#fff' : '#6366f1' }}>
+              <ArrowRightCircle size={10} className="text-gray-600" />
+              <span className={`font-black text-sm ${i === route.legs.length - 1 ? 'text-white' : 'text-indigo-400'}`}>
                 {getStationLabel(leg.to_station, stationNames)}
               </span>
             </React.Fragment>
           ))}
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '1.5rem', padding: '1.5rem', background: 'rgba(255,255,255,0.01)', borderRadius: '1.25rem', border: '1px solid rgba(255,255,255,0.03)' }}>
-          <div style={{ textAlign: 'left' }}>
-            <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#fff' }}>{formatTime(startTime)}</div>
-            <div style={{ fontSize: '0.6rem', color: '#6b7280', fontWeight: '800', letterSpacing: '0.05em' }}>DEPARTURE</div>
+        {/* Time bar */}
+        <div className="flex items-center gap-6 p-6 bg-white/[0.01] rounded-[1.25rem] border border-white/[0.03]">
+          <div>
+            <div className="text-base font-black text-white">{formatTime(startTime)}</div>
+            <div className="text-[0.6rem] text-gray-500 font-black tracking-[0.05em]">DEPARTURE</div>
           </div>
-
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0.4rem' }}>
-            <div style={{ width: '100%', height: '2px', background: 'rgba(255,255,255,0.05)', position: 'relative' }}>
-              <div style={{ position: 'absolute', left: 0, top: '-4px', width: '10px', height: '10px', background: '#6366f1', borderRadius: '50%', boxShadow: '0 0 15px rgba(99, 102, 241, 0.6)' }}></div>
-              <div style={{ position: 'absolute', right: 0, top: '-4px', width: '10px', height: '10px', background: '#6366f1', borderRadius: '50%' }}></div>
+          <div className="flex-1 flex flex-col items-center gap-1.5">
+            <div className="w-full h-0.5 bg-white/[0.05] relative">
+              <div className="absolute left-0 -top-[4px] w-2.5 h-2.5 bg-indigo-500 rounded-full shadow-[0_0_15px_rgba(99,102,241,0.6)]" />
+              <div className="absolute right-0 -top-[4px] w-2.5 h-2.5 bg-indigo-500 rounded-full" />
             </div>
-            <div style={{ fontSize: '0.7rem', color: '#4b5563', fontWeight: '900' }}>{durationStr}</div>
+            <div className="text-[0.7rem] text-gray-600 font-black">{durationStr}</div>
           </div>
-
-          <div style={{ textAlign: 'right' }}>
-            <div style={{ fontSize: '1.4rem', fontWeight: '900', color: '#fff' }}>{formatTime(endTime)}</div>
-            <div style={{ fontSize: '0.6rem', color: '#6b7280', fontWeight: '800', letterSpacing: '0.05em' }}>ARRIVAL</div>
+          <div className="text-right">
+            <div className="text-base font-black text-white">{formatTime(endTime)}</div>
+            <div className="text-[0.6rem] text-gray-500 font-black tracking-[0.05em]">ARRIVAL</div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', gap: '1rem', overflowX: 'auto', paddingBottom: '0.5rem', scrollbarWidth: 'none' }}>
+        {/* Per-leg availability */}
+        <div className="flex gap-4 overflow-x-auto pb-2 [scrollbar-width:none]">
           {route.legs.map((leg, i) => (
-            <div key={i} style={{ minWidth: '220px', padding: '1rem', background: 'rgba(0,0,0,0.25)', borderRadius: '1rem', border: '1px solid rgba(255,255,255,0.05)' }}>
-              <div style={{ fontSize: '0.6rem', fontWeight: '900', color: '#6b7280', marginBottom: '0.75rem', letterSpacing: '0.1em', display: 'flex', flexDirection: 'column', gap: '4px' }}>
+            <div key={i} className="min-w-[220px] p-4 bg-black/25 rounded-2xl border border-white/[0.05]">
+              <div className="text-[0.6rem] font-black text-gray-500 mb-3 tracking-[0.1em] flex flex-col gap-1">
                 <span>{getStationLabel(leg.from_station, stationNames)}</span>
                 {leg.booked_from_station && (
-                  <div style={{ background: 'rgba(16, 185, 129, 0.1)', color: '#10b981', padding: '4px 8px', borderRadius: '4px', border: '1px solid rgba(16, 185, 129, 0.2)', width: 'fit-content' }}>
+                  <div className="bg-emerald-500/10 text-emerald-500 px-2 py-1 rounded border border-emerald-500/20 w-fit">
                     PRO-TIP: BOOK FROM {getStationLabel(leg.booked_from_station, stationNames)}, BOARD AT {getStationLabel(leg.actual_boarding_station, stationNames)}
                   </div>
                 )}
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <div className="flex flex-col gap-1.5">
                 {leg.availability.length === 0 && (
-                  <div style={{ fontSize: '10px', color: '#4b5563', fontWeight: '700', padding: '6px 0' }}>
-                    Availability unknown — check IRCTC
-                  </div>
+                  <div className="text-[10px] text-gray-600 font-bold py-1.5">Availability unknown — check IRCTC</div>
                 )}
                 {leg.availability.map((av, j) => {
                   const st = (av.status || '').toUpperCase();
                   const isAvbl = (st.includes('AVAILABLE') || st.includes('CURR_AVBL') || st.includes('AVBL')) && !st.includes('NOT');
                   const isWl   = !isAvbl && (st.includes('WAITLIST') || st.includes('WL') || st.includes('RLWL') || st.includes('PQWL') || st.includes('GNWL'));
                   const isRac  = !isAvbl && st.includes('RAC');
-
-                  // Hide only genuine NOT_AVAILABLE (class doesn't exist / train doesn't run)
                   if (!isAvbl && !isWl && !isRac) return null;
 
-                  const bg     = isAvbl ? 'rgba(16,185,129,0.1)'  : isWl ? 'rgba(245,158,11,0.08)' : 'rgba(99,102,241,0.08)';
-                  const border = isAvbl ? 'rgba(16,185,129,0.2)'  : isWl ? 'rgba(245,158,11,0.2)'  : 'rgba(99,102,241,0.2)';
-                  const color  = isAvbl ? '#10b981'               : isWl ? '#f59e0b'               : '#818cf8';
+                  const chipClass = isAvbl
+                    ? 'bg-emerald-500/10 border-emerald-500/20 text-emerald-500'
+                    : isWl
+                    ? 'bg-amber-500/[0.08] border-amber-500/20 text-amber-400'
+                    : 'bg-indigo-500/[0.08] border-indigo-500/20 text-indigo-400';
 
                   const label = isAvbl
                     ? (av.available_count != null ? `${av.available_count} seats` : 'AVBL')
-                    : isWl
-                    ? `WL ${av.waitlist_number ?? ''}`
-                    : `RAC ${av.waitlist_number ?? ''}`;
+                    : isWl ? `WL ${av.waitlist_number ?? ''}` : `RAC ${av.waitlist_number ?? ''}`;
 
                   return (
-                    <div key={j} style={{
-                      display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                      background: bg, padding: '7px 10px', borderRadius: '8px',
-                      border: `1px solid ${border}`,
-                    }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <span style={{ fontSize: '10px', fontWeight: '900', color }}>{av.class_code}</span>
-                        <span style={{ fontSize: '11px', fontWeight: '800', color: '#fff' }}>{label}</span>
+                    <div key={j} className={`flex items-center justify-between px-2.5 py-[7px] rounded-lg border ${chipClass}`}>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-black">{av.class_code}</span>
+                        <span className="text-[11px] font-black text-white">{label}</span>
                       </div>
-                      {av.fare && (
-                        <span style={{ fontSize: '11px', fontWeight: '900', color: '#6366f1' }}>₹{av.fare}</span>
-                      )}
+                      {av.fare && <span className="text-[11px] font-black text-indigo-400">₹{av.fare}</span>}
                     </div>
                   );
                 })}
@@ -847,10 +684,11 @@ function JourneyCard({ route, isBest, stationNames }) {
           ))}
         </div>
 
+        {/* Detailed timeline toggle */}
         {route.connections > 0 && (
           <div
             onClick={() => setOpen(!open)}
-            style={{ textAlign: 'center', cursor: 'pointer', fontSize: '0.65rem', fontWeight: '900', color: '#4b5563', textTransform: 'uppercase', letterSpacing: '0.15em', marginTop: '0.5rem' }}
+            className="text-center cursor-pointer text-[0.65rem] font-black text-gray-600 uppercase tracking-[0.15em] mt-1 hover:text-gray-400 transition-colors"
           >
             {open ? 'Hide Detailed Timeline' : 'Show Detailed Timeline'}
           </div>
@@ -858,23 +696,23 @@ function JourneyCard({ route, isBest, stationNames }) {
 
         <AnimatePresence>
           {open && (
-            <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} style={{ overflow: 'hidden' }}>
-              <div style={{ padding: '1rem 0', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            <motion.div initial={{ height: 0 }} animate={{ height: 'auto' }} exit={{ height: 0 }} className="overflow-hidden">
+              <div className="py-4 flex flex-col gap-3">
                 {route.legs.map((leg, i) => (
-                  <div key={i} style={{ padding: '1rem', background: 'rgba(255,255,255,0.02)', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.03)' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                      <span style={{ color: '#fff', fontWeight: '800', fontSize: '0.85rem' }}>
-                        {leg.train_name} <span style={{ color: '#6366f1', opacity: 0.8 }}>#{leg.train_number}</span>
+                  <div key={i} className="p-4 bg-white/[0.02] rounded-xl border border-white/[0.03]">
+                    <div className="flex justify-between mb-2 gap-4 flex-wrap">
+                      <span className="text-white font-black text-sm">
+                        {leg.train_name} <span className="text-indigo-500/80">#{leg.train_number}</span>
                       </span>
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
-                        <span style={{ color: '#10b981', fontWeight: '900', fontSize: '0.85rem' }}>{formatTime(new Date(leg.departure_time))} - {formatTime(new Date(leg.arrival_time))}</span>
-                        <span style={{ color: '#4b5563', fontSize: '0.6rem', fontWeight: '900' }}>{leg.date} • GENERAL QUOTA</span>
+                      <div className="flex flex-col items-end">
+                        <span className="text-emerald-500 font-black text-sm">{formatTime(new Date(leg.departure_time))} – {formatTime(new Date(leg.arrival_time))}</span>
+                        <span className="text-gray-600 text-[0.6rem] font-black">{leg.date} · GENERAL QUOTA</span>
                       </div>
                     </div>
-                    <div style={{ color: '#6b7280', fontSize: '0.7rem', fontWeight: '700', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                      <span style={{ color: '#fff' }}>{getStationLabel(leg.from_station, stationNames)}</span>
+                    <div className="text-gray-500 text-[0.7rem] font-bold flex items-center gap-2 flex-wrap">
+                      <span className="text-white">{getStationLabel(leg.from_station, stationNames)}</span>
                       <ArrowRightCircle size={10} />
-                      <span style={{ color: '#fff' }}>{getStationLabel(leg.to_station, stationNames)}</span>
+                      <span className="text-white">{getStationLabel(leg.to_station, stationNames)}</span>
                     </div>
                   </div>
                 ))}
@@ -882,6 +720,7 @@ function JourneyCard({ route, isBest, stationNames }) {
             </motion.div>
           )}
         </AnimatePresence>
+
       </div>
     </motion.div>
   );
