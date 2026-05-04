@@ -11,6 +11,7 @@ import re
 from typing import List, Optional
 from datetime import datetime
 
+from api.models import AvailabilityResult
 from cache.redis_client import semaphore
 from config.settings import MAX_RETRIES
 

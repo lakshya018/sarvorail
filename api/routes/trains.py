@@ -350,12 +350,12 @@ async def get_routes(
                 avail = await irctc_scraper.get_seat_availability(
                     train_number, from_stn, to_stn, date, cls, quota=quota_code
                 )
-                    if avail:
-                        avail_dict = avail.dict() if hasattr(avail, "dict") else avail
-                        await cache_client.set(cache_key, avail_dict, AVAILABILITY_TTL)
-                        return avail_dict
-                except Exception as e:
-                    logger.warning(f"Could not fetch class {cls} for train {train_number}: {e}")
+                if avail:
+                    avail_dict = avail.dict() if hasattr(avail, "dict") else avail
+                    await cache_client.set(cache_key, avail_dict, AVAILABILITY_TTL)
+                    return avail_dict
+            except Exception as e:
+                logger.warning(f"Could not fetch class {cls} for train {train_number}: {e}")
         return None
 
     async def _background_refresh(train_number: str, from_stn: str, to_stn: str, date: str, cls: str, quota_code: str, cache_key: str):
