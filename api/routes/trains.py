@@ -71,6 +71,10 @@ async def get_routes(
     search_start_time = time.perf_counter()
     date_str = date.strftime("%Y-%m-%d")
 
+    # Validate inputs
+    if not source or not destination:
+        return []
+
     # --- TARGET ARCHITECTURE: SINGLE CACHE KEY ---
     full_cache_key = f"routes_full:{source}:{destination}:{date_str}:{quota}"
     cached_routes = cache.get(full_cache_key)

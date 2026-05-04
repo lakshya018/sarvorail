@@ -291,18 +291,25 @@ function App() {
 
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
+    if (!source || !dest) {
+      setError('Please select both origin and destination');
+      return;
+    }
     setLoading(true); setRoutes([]); setLogs([]); setError(null); setHasSearched(false);
-    addLog('Scanning all confirmed channels...');
+    addLog(`Searching ${source} → ${dest} on ${date}...`);
     try {
-      const res = await fetch(`${API_BASE}/routes?source=${source}&destination=${dest}&date=${date}&max_connections=${maxConn}&min_layover_mins=${minLayover}&quota=${quota}`);
-      if (!res.ok) throw new Error('Search failed');
+      const url = `${API_BASE}/routes?source=${source}&destination=${dest}&date=${date}&max_connections=${maxConn}&min_layover_mins=${minLayover}&quota=${quota}`;
+      console.log('Fetch URL:', url);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      console.log('Routes received:', data.length, data);
       setRoutes(data);
       setHasSearched(true);
-      addLog(`Scan complete. Found ${data.length} confirmed routes.`);
+      addLog(`Found ${data.length} routes. Filtering...`);
     } catch (err) {
-      console.error(err);
-      setError('Routing engine is temporarily unavailable.');
+      console.error('Search error:', err);
+      setError(`Error: ${err.message}`);
     } finally {
       setLoading(false);
     }

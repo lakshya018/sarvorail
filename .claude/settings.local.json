@@ -11,7 +11,21 @@
       "Bash(python -m py_compile scraper/irctc_scraper.py scraper/ntes_scraper.py config/settings.py)",
       "Bash(python -m api.main)",
       "Bash(curl -s \"http://localhost:8000/api/v1/health\")",
-      "Bash(python -m json.tool)"
+      "Bash(python -m json.tool)",
+      "Bash(curl -s http://localhost:5173)",
+      "Bash(curl -s \"http://localhost:8000/api/v1/trains?source=NAC&destination=JP&date=2026-05-05\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/routes?source=NAC&destination=JP&date=2026-05-05\")",
+      "Bash(cat)",
+      "Bash(node /tmp/test_api.js)",
+      "Bash(curl -s \"http://localhost:8000/api/v1/routes?source=NAC&destination=JP&date=2026-05-04&max_connections=3&min_layover_mins=30&quota=GN\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/routes?source=&destination=&date=2026-05-04\")",
+      "Bash(pkill -f \"python -m api.main\")",
+      "Bash(pkill -f \"npm run dev\")",
+      "Bash(curl -s http://localhost:8000/api/v1/health)",
+      "Bash(curl -s \"http://localhost:8000/api/v1/routes?source=NDLS&destination=LKO&date=2026-05-05\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/stations/search?query=delhi\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/stations/search?query=ndl\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/routes?source=NDLS&destination=LKO&date=2026-05-05&max_connections=3&min_layover_mins=30&quota=GN\")"
     ]
   }
 }
