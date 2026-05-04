@@ -26,12 +26,12 @@ class CacheClient:
         self.redis: Optional[Redis] = None
 
     async def connect(self):
-        # Limit connections to prevent "max number of clients reached" on Render/managed Redis
-        # max_connections=10 per worker is plenty for async usage
+        # Strictly limit connections to avoid "max number of clients reached"
+        # 5 connections per worker is safe for most managed/free tiers.
         self.redis = from_url(
             REDIS_URL, 
             decode_responses=True,
-            max_connections=10,
+            max_connections=5,
             socket_timeout=5.0,
             socket_connect_timeout=5.0,
             socket_keepalive=True,
@@ -43,7 +43,7 @@ class CacheClient:
         for i in range(3):
             try:
                 await self.redis.ping()
-                logger.info(f"Connected to Redis successfully (Pool size: 10, Attempt: {i+1}).")
+                logger.info(f"Connected to Redis successfully (Pool size: 5, Attempt: {i+1}).")
                 return
             except Exception as e:
                 if i == 2:
