@@ -12,11 +12,11 @@ router = APIRouter(prefix="/api/v1", tags=["Availability"])
 @router.get("/availability", response_model=List[AvailabilityResult])
 async def get_availability(
     request: Request,
-    train_number: str = Query(..., description="5-digit train number", example="12004"),
-    source: str = Query(..., description="Source station code (e.g., NDLS for New Delhi)", example="NDLS"),
-    destination: str = Query(..., description="Destination station code (e.g., LKO for Lucknow)", example="LKO"),
-    date: datetime.date = Query(..., description="Date of journey", example="2024-11-25"),
-    class_code: Optional[str] = Query(None, description="Class code (e.g., 3A, SL, 1A)", example="3A")
+    train_number: str = Query(..., description="5-digit train number", examples=["12004"]),
+    source: str = Query(..., description="Source station code (e.g., NDLS for New Delhi)", examples=["NDLS"]),
+    destination: str = Query(..., description="Destination station code (e.g., LKO for Lucknow)", examples=["LKO"]),
+    date: datetime.date = Query(..., description="Date of journey", examples=["2024-11-25"]),
+    class_code: Optional[str] = Query(None, description="Class code (e.g., 3A, SL, 1A)", examples=["3A"])
 ):
     irctc_scraper = request.app.state.irctc_scraper
     date_str = date.strftime("%Y-%m-%d")

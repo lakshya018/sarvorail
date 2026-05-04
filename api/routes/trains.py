@@ -32,9 +32,9 @@ async def get_schedule_cached(train_number: str, date: str, source: Optional[str
 
 @router.get("/trains", response_model=List[TrainSummary])
 async def get_trains(
-    source: str = Query(..., description="Source station code", example="NDLS"),
-    destination: str = Query(..., description="Destination station code", example="LKO"),
-    date: datetime.date = Query(..., description="Date of journey", example="2024-11-25"),
+    source: str = Query(..., description="Source station code", examples=["NDLS"]),
+    destination: str = Query(..., description="Destination station code", examples=["LKO"]),
+    date: datetime.date = Query(..., description="Date of journey", examples=["2024-11-25"]),
 ):
     date_str = date.strftime("%Y-%m-%d")
     cache_key = f"trains_direct:{source}:{destination}:{date_str}"
@@ -54,9 +54,9 @@ async def get_trains(
 @router.get("/routes", response_model=List[Route])
 async def get_routes(
     request: Request,
-    source: str = Query(..., description="Source station code", example="NDLS"),
-    destination: str = Query(..., description="Destination station code", example="LKO"),
-    date: datetime.date = Query(..., description="Date of journey", example="2024-11-25"),
+    source: str = Query(..., description="Source station code", examples=["NDLS"]),
+    destination: str = Query(..., description="Destination station code", examples=["LKO"]),
+    date: datetime.date = Query(..., description="Date of journey", examples=["2024-11-25"]),
     max_duration_hours: float = Query(48.0),
     max_connections: int = Query(3),
     min_layover_mins: int = Query(30),
@@ -166,6 +166,6 @@ async def get_routes(
     logger.info(f"Search completed in {duration_ms:.2f}ms. Found {len(final_routes)} routes.")
     return final_routes[:20]
 
-@router.get("/{train_number}/schedule", response_model=List[StationStop])
+@router.get("/{train_number}/schedule")
 async def get_train_schedule(train_number: str, date: Optional[str] = None, source: Optional[str] = "NDLS"):
     return await get_schedule_cached(train_number, date or datetime.datetime.now().strftime("%Y-%m-%d"), source=source)

@@ -118,8 +118,11 @@ class IRCTCScraper:
                         timeout=25.0
                     )
                     self._initialized = True
+                    logger.info("IRCTC session initialized successfully")
+                except asyncio.TimeoutError:
+                    logger.warning("IRCTC session init timeout (expected on first request). Will retry on next API call.")
                 except Exception as e:
-                    logger.error(f"Session initialization failed: {str(e)}", exc_info=True)
+                    logger.warning(f"IRCTC session init failed: {type(e).__name__}. Will retry on next API call.")
 
     async def get_seat_availability(
         self,
