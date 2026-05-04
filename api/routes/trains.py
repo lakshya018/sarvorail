@@ -220,11 +220,9 @@ async def get_routes(
     # Step 1: Get all direct trains (including nearby)
     # --- END-TO-END PERFORMANCE TIMER START ---
     search_start_time = time.perf_counter()
-    logger.info(f"--- 🚀 END-TO-END SEARCH START: {source} -> {destination} on {date} ---")
+    logger.info(f"Search: {source} -> {destination} on {date}")
     date_str = date.strftime("%Y-%m-%d")
-    logger.info(f"Step 1: Fetching direct trains (Radius: {nearby_radius}km)...")
     direct_trains = await get_trains(source, destination, date, nearby_radius)
-    logger.info(f"Found {len(direct_trains)} direct/nearby train options.")
     
     # Get all potential start/end stations for the graph
     start_stations = [source]
@@ -235,12 +233,10 @@ async def get_routes(
         end_stations.extend(geo.get_nearby_stations(destination, nearby_radius))
     
     # Step 2: Get candidate intermediate stations (geographically on the way)
-    logger.info("Step 2: Identifying candidate junctions geographically on the way...")
     intermediate_stations = get_candidate_stations(source, destination)
-    logger.info(f"Selected {len(intermediate_stations)} candidate junctions for connection search.")
     
     # Step 3: Fan out leg fetches
-    logger.info(f"Step 3: Fanning out parallel searches for connecting legs via {len(intermediate_stations)} junctions...")
+    logger.debug(f"Fanning out via {len(intermediate_stations)} junctions...")
     tasks = []
     for s in start_stations:
         for mid in intermediate_stations:
@@ -260,7 +256,7 @@ async def get_routes(
     # Remove duplicates
     unique_trains_dict = {f"{t.train_number}_{t.source_station}_{t.destination_station}": t for t in all_trains}
     unique_trains = unique_trains_dict.values()
-    logger.info(f"Total unique trains gathered for graph: {len(unique_trains_dict)}")
+    logger.debug(f"Unique trains for graph: {len(unique_trains_dict)}")
 
     # Build a map from train_number -> class_list for use in availability checking.
     # A train may appear as multiple source/dest pairs; any non-empty class_list wins.
@@ -270,7 +266,6 @@ async def get_routes(
             train_class_map[t.train_number] = t.class_list
 
     # Step 4: Build graph and find valid routes for all combinations of start/end
-    logger.info("Step 4: Building routing graph and executing pathfinding...")
     graph = RouteGraph()
     graph.build_graph(list(unique_trains))
     
@@ -286,10 +281,7 @@ async def get_routes(
             processed_pairs.add((s, e))
     
     routes = all_discovered_routes
-    logger.info(f"Discovered {len(routes)} valid connected routes within {constraints.max_total_duration_hours}h.")
-    
-    # Step 5: Check availability for all unique legs across all routes in parallel
-    logger.info("Step 5: Verifying seat availability for all unique legs in parallel...")
+    logger.debug(f"Discovered {len(routes)} routes.")
     irctc_scraper = request.app.state.irctc_scraper
     
     # 1. Identify all unique legs
@@ -438,7 +430,7 @@ async def get_routes(
                 for res in backtrack_results:
                     if res:
                         prev_stn, alt_results = res
-                        logger.info(f"✨ [Optimizer] FOUND SEATS! Book from {prev_stn}")
+                        logger.debug(f"[Optimizer] Seats found booking from {prev_stn}")
                         leg.booked_from_station = prev_stn
                         leg.actual_boarding_station = leg.from_station
                         return alt_results
@@ -537,14 +529,11 @@ async def get_routes(
         r for r in simplified
         if (r.legs[0].train_number, r.legs[-1].to_station) not in direct_keys
     ]
-    logger.info(f"Found {len(novel_simplified)} boarding-point simplification(s).")
-
     all_routes = final_confirmed + novel_simplified
     final_routes = sorted(all_routes, key=lambda x: (x.connections, x.total_duration_minutes))
-    
-    # --- END-TO-END PERFORMANCE TIMER END ---
+
     total_search_duration = time.perf_counter() - search_start_time
-    logger.info(f"--- 🏁 END-TO-END SEARCH COMPLETE IN {total_search_duration:.2f}s | Found {len(final_routes)} routes ---")
+    logger.info(f"Search complete in {total_search_duration:.2f}s — {len(final_routes)} routes found")
     
     return final_routes
 

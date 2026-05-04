@@ -63,7 +63,7 @@ async def get_trains_between_stations(source: str, destination: str, date: str) 
             if not isinstance(train_list, list):
                 return []
 
-            logger.info(f"IRCTC found {len(train_list)} trains between {source} and {destination}")
+            logger.debug(f"IRCTC found {len(train_list)} trains between {source} and {destination}")
             results = []
             for t in train_list:
                 if not isinstance(t, dict): continue

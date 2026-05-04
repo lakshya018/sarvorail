@@ -47,7 +47,7 @@ class RouteGraph:
         queue = [(0, 0, count, source, [], start_date, {source})]
         routes = []
         
-        logger.info(f"--- 🧭 A* PATHFINDING START: {source} -> {destination} ---")
+        logger.debug(f"A* pathfinding: {source} -> {destination}")
 
         while queue:
             f, duration, _, current_station, path_legs, current_time, visited = heapq.heappop(queue)

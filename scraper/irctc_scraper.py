@@ -93,7 +93,7 @@ def _parse_status(availability_status: str, availability_type: str) -> tuple[str
         if nums:
             # For 'RLWL45/WL23', the current WL is the last number
             waitlist_number = int(nums[-1])
-    logger.info(f"Parsed IRCTC status: '{s}' (Type {a_type}) -> {status} (Count: {available_count}, WL: {waitlist_number})")
+    logger.debug(f"Parsed IRCTC status: '{s}' (Type {a_type}) -> {status}")
     return status, available_count, waitlist_number
 
 
@@ -160,16 +160,10 @@ class IRCTCScraper:
                 resp.raise_for_status()
                 data = resp.json()
 
-                logger.info(f"IRCTC API response for {train_number}/{class_code}: HTTP {resp.status_code}")
-
                 # Find the entry for the exact requested date
                 avl_list = data.get("avlDayList", [])
                 target_entry = None
-                
-                # IRCTC dates are "D-M-YYYY" or "DD-MM-YYYY"
                 req_d, req_m, req_y = date_obj.day, date_obj.month, date_obj.year
-                
-                logger.info(f"🔍 [Scraper] IRCTC returned {len(avl_list)} dates for {train_number}. Requested: {req_d}-{req_m}-{req_y}")
 
                 for entry in avl_list:
                     edate = str(entry.get("availablityDate", ""))
@@ -193,7 +187,7 @@ class IRCTCScraper:
                         fare=None
                     )
                 
-                logger.info(f"✅ [Scraper] Found exact date match for {train_number}: {target_entry.get('availablityStatus')}")
+                logger.debug(f"[Scraper] Date match for {train_number}: {target_entry.get('availablityStatus')}")
 
                 if target_entry:
                     status, available_count, waitlist_number = _parse_status(
