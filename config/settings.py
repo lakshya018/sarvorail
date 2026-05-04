@@ -7,11 +7,6 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-
-
-# Redis
-REDIS_URL = os.getenv("REDIS_URL", "redis://localhost:6379")
-
 # Logging
 LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")
 

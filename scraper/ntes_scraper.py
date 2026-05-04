@@ -10,7 +10,6 @@ from datetime import datetime
 
 from api.models import Train, StationStop
 from config.settings import MAX_RETRIES
-from cache.redis_client import semaphore
 from scraper.irctc_scraper import _make_headers, _client
 
 logger = logging.getLogger(__name__)
@@ -41,11 +40,10 @@ async def get_trains_between_stations(source: str, destination: str, date: str) 
         try:
             await scraper._ensure_session()
             headers = _make_headers(referer="https://www.irctc.co.in/nget/train-search")
-            async with semaphore:
-                resp = await asyncio.wait_for(
-                    _client.post(_TRAINS_BETWEEN_URL, json=payload, headers=headers),
-                    timeout=35.0
-                )
+            resp = await asyncio.wait_for(
+                _client.post(_TRAINS_BETWEEN_URL, json=payload, headers=headers),
+                timeout=35.0
+            )
             
             if resp.status_code == 403:
                 logger.warning(f"IRCTC 403 on search. Refreshing...")
@@ -132,20 +130,18 @@ async def get_train_schedule(train_number: str, date: Optional[str] = None, sour
 
     try:
         await scraper._ensure_session()
-        async with semaphore:
+        resp = await asyncio.wait_for(
+            _client.get(url, headers=_make_headers()),
+            timeout=30.0
+        )
+
+        if resp.status_code == 403:
+            scraper._initialized = False
+            await scraper._ensure_session()
             resp = await asyncio.wait_for(
                 _client.get(url, headers=_make_headers()),
                 timeout=30.0
             )
-        
-        if resp.status_code == 403:
-            scraper._initialized = False
-            await scraper._ensure_session()
-            async with semaphore:
-                resp = await asyncio.wait_for(
-                    _client.get(url, headers=_make_headers()),
-                    timeout=30.0
-                )
 
         if resp.status_code != 200: return []
 

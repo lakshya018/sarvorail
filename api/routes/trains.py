@@ -10,12 +10,7 @@ from typing import List, Optional
 from fastapi import APIRouter, Query, HTTPException, Request
 
 from api.models import TrainSummary, Route, RouteConstraints, StationStop, RouteLeg, AvailabilityResult
-from cache.redis_client import (
-    cache_client,
-    TRAINS_BETWEEN_TTL, TRAINS_BETWEEN_PERM_TTL,
-    TRAIN_SCHEDULE_PERM_TTL,
-    AVAILABILITY_TTL,
-)
+from core import cache
 from scraper.ntes_scraper import get_trains_between_stations, get_train_schedule as fetch_train_schedule
 from core.graph import RouteGraph
 from core.geo import get_geo_indexer
@@ -25,14 +20,14 @@ logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/v1", tags=["Trains & Routes"])
 
 async def get_schedule_cached(train_number: str, date: str, source: Optional[str] = None) -> List[StationStop]:
-    """Fetch train schedule with a permanent Redis cache."""
+    """Fetch train schedule with in-memory cache."""
     perm_key = f"schedule_perm:{train_number}:{source}"
-    cached = await cache_client.get(perm_key)
+    cached = cache.get(perm_key)
     if cached:
         return [StationStop(**s) for s in cached]
     schedule = await fetch_train_schedule(train_number, date=date, source=source)
     if schedule:
-        await cache_client.set(perm_key, [s.dict() for s in schedule], TRAIN_SCHEDULE_PERM_TTL)
+        cache.set(perm_key, [s.dict() for s in schedule], cache.TRAIN_SCHEDULE_PERM_TTL)
     return schedule
 
 @router.get("/trains", response_model=List[TrainSummary])
@@ -43,17 +38,17 @@ async def get_trains(
 ):
     date_str = date.strftime("%Y-%m-%d")
     cache_key = f"trains_direct:{source}:{destination}:{date_str}"
-    
-    cached = await cache_client.get(cache_key)
+
+    cached = cache.get(cache_key)
     if cached:
         return [TrainSummary(**t) for t in cached]
 
     trains = await get_trains_between_stations(source, destination, date_str)
     summaries = [TrainSummary(**t.dict()) for t in trains]
-    
+
     if summaries:
-        await cache_client.set(cache_key, [s.dict() for s in summaries], TRAINS_BETWEEN_TTL)
-    
+        cache.set(cache_key, [s.dict() for s in summaries], cache.TRAINS_BETWEEN_TTL)
+
     return summaries
 
 @router.get("/routes", response_model=List[Route])
@@ -75,10 +70,10 @@ async def get_routes(
 ):
     search_start_time = time.perf_counter()
     date_str = date.strftime("%Y-%m-%d")
-    
+
     # --- TARGET ARCHITECTURE: SINGLE CACHE KEY ---
     full_cache_key = f"routes_full:{source}:{destination}:{date_str}:{quota}"
-    cached_routes = await cache_client.get(full_cache_key)
+    cached_routes = cache.get(full_cache_key)
     if cached_routes:
         logger.info(f"✨ [Cache Hit] Full routes for {source}->{destination}")
         return [Route(**r) if isinstance(r, dict) else r for r in cached_routes]
@@ -121,17 +116,14 @@ async def get_routes(
 
     async def fetch_one(train_number, from_stn, to_stn, date, cls, quota_code):
         cache_key = f"avail:{train_number}:{from_stn}:{to_stn}:{date}:{cls}:{quota_code}"
-        cached = await cache_client.get(cache_key)
+        cached = cache.get(cache_key)
         if cached: return cached
-        
-        token_granted = await cache_client.acquire_irctc_token()
-        if not token_granted: return None
 
         try:
             avail = await irctc_scraper.get_seat_availability(train_number, from_stn, to_stn, date, cls, quota=quota_code)
             if avail:
                 avail_dict = avail.dict()
-                await cache_client.set(cache_key, avail_dict, AVAILABILITY_TTL)
+                cache.set(cache_key, avail_dict, cache.AVAILABILITY_TTL)
                 return avail_dict
         except: pass
         return None
@@ -164,7 +156,7 @@ async def get_routes(
 
     # --- TARGET ARCHITECTURE: CACHE FINAL RESULT ONCE ---
     final_routes_data = [r.dict() for r in final_routes[:20]]
-    await cache_client.set(full_cache_key, final_routes_data, ttl_seconds=86400)
+    cache.set(full_cache_key, final_routes_data, ttl_seconds=86400)
 
     duration_ms = (time.perf_counter() - search_start_time) * 1000
     logger.info(f"Search completed in {duration_ms:.2f}ms. Found {len(final_routes)} routes.")

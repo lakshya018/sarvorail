@@ -8,7 +8,6 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
-from cache.redis_client import cache_client
 from scraper.irctc_scraper import IRCTCScraper
 from config.settings import LOG_LEVEL
 
@@ -23,16 +22,13 @@ irctc_scraper = IRCTCScraper()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # 1. Connect to Redis
-    await cache_client.connect()
-    
-    # 2. Store instances in app state
+    # Store instances in app state
     app.state.irctc_scraper = irctc_scraper
-    
+    logger.info("App started — using in-memory cache (cachetools)")
+
     yield
-    
-    # Shutdown
-    await cache_client.disconnect()
+
+    logger.info("App shutdown")
 
 app = FastAPI(title="SarvoRail API", lifespan=lifespan)
 
@@ -78,10 +74,10 @@ async def search_stations(query: str):
 async def health_check():
     return HealthStatus(
         status="ok",
-        redis_connected=cache_client.redis is not None,
+        redis_connected=False,  # Using in-memory cache now
         active_sessions=0,
         total_sessions=0,
-        uptime_seconds=0.0 # would calculate from app start time
+        uptime_seconds=0.0
     )
 
 if __name__ == "__main__":

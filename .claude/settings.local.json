@@ -5,7 +5,13 @@
       "Bash(git commit *)",
       "Bash(git push *)",
       "Bash(npm install *)",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(pip install *)",
+      "Bash(python -m py_compile api/main.py api/routes/trains.py core/cache.py)",
+      "Bash(python -m py_compile scraper/irctc_scraper.py scraper/ntes_scraper.py config/settings.py)",
+      "Bash(python -m api.main)",
+      "Bash(curl -s \"http://localhost:8000/api/v1/health\")",
+      "Bash(python -m json.tool)"
     ]
   }
 }
