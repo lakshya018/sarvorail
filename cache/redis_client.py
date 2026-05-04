@@ -26,6 +26,11 @@ class CacheClient:
         self.redis: Optional[Redis] = None
 
     async def connect(self):
+        if self.redis:
+            return 
+        
+        logger.info(f"Creating Redis connection pool: {id(self)}")
+        
         # Strictly limit connections to avoid "max number of clients reached"
         # 5 connections per worker is safe for most managed/free tiers.
         self.redis = from_url(
