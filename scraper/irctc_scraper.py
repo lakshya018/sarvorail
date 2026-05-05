@@ -210,13 +210,10 @@ class IRCTCScraper:
         date: str,
         quota: str = "GN",
     ) -> List[AvailabilityResult]:
-        """Fetch availability for all standard classes sequentially with anti-ban delay."""
-        valid: List[AvailabilityResult] = []
-        for cls in _ALL_CLASSES:
-            try:
-                res = await self.get_seat_availability(train_number, source, destination, date, cls, quota)
-                valid.append(res)
-                await asyncio.sleep(0.3)
-            except Exception as e:
-                logger.warning(f"Skipping class {cls} — error: {e}")
-        return valid
+        """Fetch availability for all standard classes in parallel."""
+        tasks = [
+            self.get_seat_availability(train_number, source, destination, date, cls, quota)
+            for cls in _ALL_CLASSES
+        ]
+        results = await asyncio.gather(*tasks, return_exceptions=True)
+        return [r for r in results if isinstance(r, AvailabilityResult)]

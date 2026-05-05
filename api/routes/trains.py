@@ -146,13 +146,14 @@ async def _get_routes_impl(request, source, destination, date, max_duration_hour
         results = await asyncio.gather(*tasks, return_exceptions=True)
         return [AvailabilityResult(**r) if isinstance(r, dict) else r for r in results if r]
 
-    # Fetch unique availabilities sequentially or in very small batches to avoid pool exhaustion
-    avail_lookup = {}
+    # Fetch all leg availabilities in parallel
     unique_keys = list(unique_legs_map.keys())
-    for key in unique_keys:
-        leg = unique_legs_map[key]
-        result = await _fetch_availability(leg, quota)
-        avail_lookup[key] = result if result else []
+    parallel_tasks = [_fetch_availability(unique_legs_map[k], quota) for k in unique_keys]
+    parallel_results = await asyncio.gather(*parallel_tasks, return_exceptions=True)
+    avail_lookup = {
+        k: (r if isinstance(r, list) else [])
+        for k, r in zip(unique_keys, parallel_results)
+    }
 
     # Assemble and filter
     final_routes = []
