@@ -7,6 +7,7 @@ import asyncio
 import uuid
 import time
 import re
+import os
 from typing import List, Optional
 from datetime import datetime
 from curl_cffi import requests as cffi_requests
@@ -22,6 +23,9 @@ _BASE_URL = "https://www.irctc.co.in/eticketing/protected/mapps1/avlFarenquiry"
 
 # Browser impersonation profile - matches Chrome TLS fingerprint
 _IMPERSONATE = "chrome120"
+
+# Optional proxy for cloud environments where IRCTC blocks the host IP
+_PROXY = os.getenv("PROXY_URL")
 
 
 def _make_headers(referer: str = "https://www.irctc.co.in/nget/booking/train-list") -> dict:
@@ -52,11 +56,16 @@ def _make_headers(referer: str = "https://www.irctc.co.in/nget/booking/train-lis
 
 # Shared async session with browser TLS fingerprint
 # Force HTTP/1.1 to avoid HTTP/2 stream errors on serverless platforms (Vercel)
-_client = cffi_requests.AsyncSession(
+_session_kwargs = dict(
     impersonate=_IMPERSONATE,
     timeout=30,
     http_version=CurlHttpVersion.V1_1,
 )
+if _PROXY:
+    _session_kwargs["proxy"] = _PROXY
+    logger.info(f"Using proxy for IRCTC: {_PROXY[:30]}...")
+
+_client = cffi_requests.AsyncSession(**_session_kwargs)
 
 _ALL_CLASSES = ["SL", "3A", "3E", "2A", "1A", "CC", "EC", "2S"]
 
