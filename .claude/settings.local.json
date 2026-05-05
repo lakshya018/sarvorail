@@ -25,7 +25,14 @@
       "Bash(curl -s \"http://localhost:8000/api/v1/routes?source=NDLS&destination=LKO&date=2026-05-05\")",
       "Bash(curl -s \"http://localhost:8000/api/v1/stations/search?query=delhi\")",
       "Bash(curl -s \"http://localhost:8000/api/v1/stations/search?query=ndl\")",
-      "Bash(curl -s \"http://localhost:8000/api/v1/routes?source=NDLS&destination=LKO&date=2026-05-05&max_connections=3&min_layover_mins=30&quota=GN\")"
+      "Bash(curl -s \"http://localhost:8000/api/v1/routes?source=NDLS&destination=LKO&date=2026-05-05&max_connections=3&min_layover_mins=30&quota=GN\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/trains?source=NDLS&destination=LKO&date=2026-05-05\" -m 70)",
+      "Bash(curl -s -o /dev/null -w \"Status: %{http_code}, Time: %{time_total}s\\\\n\" -m 15 \"https://www.irctc.co.in/nget/train-search\")",
+      "Bash(curl -s -o /dev/null -w \"Status: %{http_code}, Time: %{time_total}s\\\\n\" --http1.1 -m 15 \"https://www.irctc.co.in/nget/train-search\")",
+      "Bash(curl -s -o /dev/null -w \"Status: %{http_code}, Time: %{time_total}s\\\\n\" -m 10 \"https://www.google.com\")",
+      "Bash(pkill -f \"uvicorn api.main\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/trains?source=NDLS&destination=LKO&date=2026-05-06\" -m 30)",
+      "Bash(curl -s \"http://localhost:8000/api/v1/routes?source=NDLS&destination=LKO&date=2026-05-06\" -m 60)"
     ]
   }
 }

@@ -1,15 +1,15 @@
 """
 IRCTC Scraper — uses IRCTC's internal avlFarenquiry API directly.
-No browser automation needed. Fast, reliable JSON responses.
+Uses curl_cffi to impersonate Chrome's TLS fingerprint, bypassing Akamai bot detection.
 """
 import logging
 import asyncio
 import uuid
 import time
-import httpx
 import re
 from typing import List, Optional
 from datetime import datetime
+from curl_cffi import requests as cffi_requests
 
 from api.models import AvailabilityResult
 from config.settings import MAX_RETRIES
@@ -18,6 +18,10 @@ logger = logging.getLogger(__name__)
 
 # IRCTC internal availability API
 _BASE_URL = "https://www.irctc.co.in/eticketing/protected/mapps1/avlFarenquiry"
+
+# Browser impersonation profile - matches Chrome TLS fingerprint
+_IMPERSONATE = "chrome120"
+
 
 def _make_headers(referer: str = "https://www.irctc.co.in/nget/booking/train-list") -> dict:
     """Generate per-request headers including the dynamic greq fingerprint."""
@@ -44,12 +48,11 @@ def _make_headers(referer: str = "https://www.irctc.co.in/nget/booking/train-lis
         "sec-fetch-site": "same-origin",
     }
 
-# Shared client with cookie support
-_client = httpx.AsyncClient(
-    headers=_make_headers(), 
-    timeout=httpx.Timeout(40.0, connect=10.0), 
-    follow_redirects=True,
-    cookies={"bmirak": "webbm"} # Pre-seed some known values
+
+# Shared async session with browser TLS fingerprint
+_client = cffi_requests.AsyncSession(
+    impersonate=_IMPERSONATE,
+    timeout=30,
 )
 
 _ALL_CLASSES = ["SL", "3A", "3E", "2A", "1A", "CC", "EC", "2S"]
@@ -59,12 +62,11 @@ def _parse_status(availability_status: str, availability_type: str) -> tuple[str
     """Parse IRCTC availablityStatus string into (status, available_count, waitlist_number)."""
     s = str(availability_status).upper().strip()
     a_type = str(availability_type)
-    
+
     available_count: Optional[int] = None
     waitlist_number: Optional[int] = None
     status = "NOT_AVAILABLE"
-    
-    # 1. Determine Status Category (Check negative statuses FIRST)
+
     if "DEPARTED" in s:
         status = "TRAIN_DEPARTED"
     elif any(x in s for x in ["REGRET", "NOT AVAILABLE", "NOT_AVAILABLE", "CANCELLED", "DOES NOT RUN"]):
@@ -75,25 +77,17 @@ def _parse_status(availability_status: str, availability_type: str) -> tuple[str
         status = "WAITLIST"
     elif a_type == "2" or "RAC" in s:
         status = "RAC"
-    
-    # Check if a_type is 0 (often means not available or error)
+
     if a_type == "0" and status == "NOT_AVAILABLE":
         status = "NOT_AVAILABLE"
-        
-    # 2. Extract Numbers
-    # Format 'RLWL45/WL23' -> numbers are [45, 23]. 23 is the current status.
-    # Format 'AVAILABLE-0005' -> number is [5].
+
     nums = re.findall(r"\d+", s)
-    
+
     if status == "AVAILABLE":
         if nums:
             available_count = int(nums[-1])
-        else:
-            # If type 1 but no number, it's just 'AVAILABLE'
-            available_count = None 
     elif status in ["WAITLIST", "RAC"]:
         if nums:
-            # For 'RLWL45/WL23', the current WL is the last number
             waitlist_number = int(nums[-1])
     logger.debug(f"Parsed IRCTC status: '{s}' (Type {a_type}) -> {status}")
     return status, available_count, waitlist_number
@@ -107,35 +101,8 @@ class IRCTCScraper:
         pass
 
     async def _ensure_session(self):
-        """Ensure IRCTC session is active. Uses a lock to prevent concurrent refresh storms."""
-        async with self._session_lock:
-            if self._initialized and _client.cookies:
-                return
-
-            logger.info("Initializing fresh IRCTC session...")
-            max_retries = 2
-            for attempt in range(max_retries):
-                try:
-                    await asyncio.wait_for(
-                        _client.get("https://www.irctc.co.in/nget/train-search",
-                                   headers=_make_headers("https://www.google.com")),
-                        timeout=15.0
-                    )
-                    self._initialized = True
-                    logger.info("IRCTC session initialized successfully")
-                    return
-                except asyncio.TimeoutError:
-                    logger.warning(f"IRCTC session init timeout (attempt {attempt + 1}/{max_retries}). Retrying...")
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(2 ** attempt)
-                except Exception as e:
-                    logger.warning(f"IRCTC session init failed: {type(e).__name__} (attempt {attempt + 1}/{max_retries})")
-                    if attempt < max_retries - 1:
-                        await asyncio.sleep(2 ** attempt)
-
-            # Mark as initialized even if failed - will try again on next request
-            self._initialized = True
-            logger.warning("IRCTC session init failed after retries. Proceeding with uninitialized session.")
+        """No-op. curl_cffi handles TLS fingerprinting; bmirak header is sufficient."""
+        self._initialized = True
 
     async def get_seat_availability(
         self,
@@ -146,10 +113,7 @@ class IRCTCScraper:
         class_code: str,
         quota: str = "GN",
     ) -> AvailabilityResult:
-        """Fetch availability for a specific class with concurrency protection."""
-        await self._ensure_session()
-
-        # Convert date
+        """Fetch availability for a specific class."""
         try:
             date_obj = datetime.strptime(date, "%Y-%m-%d")
         except ValueError:
@@ -169,22 +133,27 @@ class IRCTCScraper:
         max_retries = 2
         for attempt in range(max_retries):
             try:
-                resp = await asyncio.wait_for(
-                    _client.post(url, json=payload, headers=_make_headers()),
-                    timeout=20.0
+                resp = await _client.post(
+                    url,
+                    json=payload,
+                    headers=_make_headers(),
+                    timeout=20,
                 )
 
                 if resp.status_code == 403:
-                    logger.warning(f"IRCTC 403. Refreshing session (Attempt {attempt+1})...")
-                    # Force re-init on 403
-                    self._initialized = False
-                    await self._ensure_session()
+                    logger.warning(f"IRCTC 403 (attempt {attempt + 1}/{max_retries})")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(1)
                     continue
 
-                resp.raise_for_status()
+                if resp.status_code != 200:
+                    logger.warning(f"IRCTC HTTP {resp.status_code}")
+                    if attempt < max_retries - 1:
+                        await asyncio.sleep(2 ** attempt)
+                    continue
+
                 data = resp.json()
 
-                # Find the entry for the exact requested date
                 avl_list = data.get("avlDayList", [])
                 target_entry = None
                 req_d, req_m, req_y = date_obj.day, date_obj.month, date_obj.year
@@ -193,7 +162,6 @@ class IRCTCScraper:
                     edate = str(entry.get("availablityDate", ""))
                     if not edate: continue
                     try:
-                        # Split "4-5-2026" or "04-05-2026"
                         parts = edate.split("-")
                         if len(parts) == 3:
                             if int(parts[0]) == req_d and int(parts[1]) == req_m and int(parts[2]) == req_y:
@@ -202,24 +170,15 @@ class IRCTCScraper:
                     except: continue
 
                 if not target_entry:
-                    logger.warning(f"❌ [Scraper] No exact match for {req_d}-{req_m}-{req_y} in IRCTC response for {train_number}")
                     return AvailabilityResult(
-                        class_code=class_code,
-                        status="NOT_AVAILABLE",
-                        available_count=None,
-                        waitlist_number=None,
-                        fare=None
+                        class_code=class_code, status="NOT_AVAILABLE",
+                        available_count=None, waitlist_number=None, fare=None
                     )
-                
-                logger.debug(f"[Scraper] Date match for {train_number}: {target_entry.get('availablityStatus')}")
 
-                if target_entry:
-                    status, available_count, waitlist_number = _parse_status(
-                        target_entry.get("availablityStatus", ""),
-                        target_entry.get("availablityType", "0"),
-                    )
-                else:
-                    status, available_count, waitlist_number = "NOT_AVAILABLE", None, None
+                status, available_count, waitlist_number = _parse_status(
+                    target_entry.get("availablityStatus", ""),
+                    target_entry.get("availablityType", "0"),
+                )
 
                 fare = None
                 try:
@@ -228,34 +187,19 @@ class IRCTCScraper:
                     pass
 
                 return AvailabilityResult(
-                    class_code=class_code,
-                    status=status,
-                    available_count=available_count,
-                    waitlist_number=waitlist_number,
-                    fare=fare,
+                    class_code=class_code, status=status,
+                    available_count=available_count, waitlist_number=waitlist_number, fare=fare,
                 )
 
-            except asyncio.TimeoutError:
-                logger.warning(f"IRCTC timeout on attempt {attempt + 1}/{max_retries}")
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(2 ** attempt)
-            except httpx.HTTPStatusError as e:
-                logger.warning(f"IRCTC API HTTP error on attempt {attempt + 1}: {e.response.status_code}")
-                if attempt < max_retries - 1:
-                    await asyncio.sleep(2 ** attempt)
             except Exception as e:
-                logger.warning(f"IRCTC API error on attempt {attempt + 1}: {type(e).__name__}")
+                logger.warning(f"IRCTC API error on attempt {attempt + 1}: {type(e).__name__}: {e}")
                 if attempt < max_retries - 1:
                     await asyncio.sleep(2 ** attempt)
 
-        # Return "NOT_AVAILABLE" instead of raising - graceful degradation
         logger.warning(f"IRCTC unavailable for {train_number}/{class_code}. Returning NOT_AVAILABLE.")
         return AvailabilityResult(
-            class_code=class_code,
-            status="NOT_AVAILABLE",
-            available_count=None,
-            waitlist_number=None,
-            fare=None,
+            class_code=class_code, status="NOT_AVAILABLE",
+            available_count=None, waitlist_number=None, fare=None,
         )
 
     async def get_all_classes_availability(
@@ -266,16 +210,13 @@ class IRCTCScraper:
         date: str,
         quota: str = "GN",
     ) -> List[AvailabilityResult]:
-        """
-        Fetch availability for all standard classes.
-        Sequential with small delay to avoid 403 Forbidden from Akamai.
-        """
+        """Fetch availability for all standard classes sequentially with anti-ban delay."""
         valid: List[AvailabilityResult] = []
         for cls in _ALL_CLASSES:
             try:
                 res = await self.get_seat_availability(train_number, source, destination, date, cls, quota)
                 valid.append(res)
-                await asyncio.sleep(0.5) # Anti-ban delay
+                await asyncio.sleep(0.3)
             except Exception as e:
                 logger.warning(f"Skipping class {cls} — error: {e}")
         return valid

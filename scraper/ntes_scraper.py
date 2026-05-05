@@ -1,10 +1,9 @@
 """
 IRCTC Scraper for finding trains between stations and schedules.
-Uses IRCTC's internal JSON APIs discovered by the user.
+Uses IRCTC's internal JSON APIs with curl_cffi for TLS fingerprinting.
 """
 import logging
 import asyncio
-import httpx
 from typing import List, Optional
 from datetime import datetime
 
@@ -16,17 +15,9 @@ logger = logging.getLogger(__name__)
 
 _TRAINS_BETWEEN_URL = "https://www.irctc.co.in/eticketing/protected/mapps1/altAvlEnq/TC"
 
+
 async def get_trains_between_stations(source: str, destination: str, date: str) -> List[Train]:
     """Fetch all trains between two stations on a specific date using IRCTC API."""
-    try:
-        return await asyncio.wait_for(_get_trains_impl(source, destination, date), timeout=45.0)
-    except asyncio.TimeoutError:
-        logger.warning(f"Train search timeout for {source}->{destination}")
-        return []
-
-async def _get_trains_impl(source: str, destination: str, date: str) -> List[Train]:
-    """Implementation of train search with retry logic."""
-    # Convert YYYY-MM-DD → YYYYMMDD
     try:
         date_obj = datetime.strptime(date, "%Y-%m-%d")
         irctc_date = date_obj.strftime("%Y%m%d")
@@ -40,28 +31,28 @@ async def _get_trains_impl(source: str, destination: str, date: str) -> List[Tra
         "ticketType": "E", "loyaltyRedemptionBooking": False, "ftBooking": False
     }
 
-    # We use a dummy instance just to leverage the class-level session lock
-    from scraper.irctc_scraper import IRCTCScraper
-    scraper = IRCTCScraper()
-
     for attempt in range(MAX_RETRIES):
         try:
-            await scraper._ensure_session()
             headers = _make_headers(referer="https://www.irctc.co.in/nget/train-search")
-            resp = await asyncio.wait_for(
-                _client.post(_TRAINS_BETWEEN_URL, json=payload, headers=headers),
-                timeout=10.0
+            resp = await _client.post(
+                _TRAINS_BETWEEN_URL,
+                json=payload,
+                headers=headers,
+                timeout=20,
             )
-            
+
             if resp.status_code == 403:
-                logger.warning(f"IRCTC 403 on search. Refreshing...")
-                scraper._initialized = False
-                await scraper._ensure_session()
+                logger.warning(f"IRCTC 403 on search (Attempt {attempt + 1})")
+                await asyncio.sleep(1)
                 continue
 
-            resp.raise_for_status()
+            if resp.status_code != 200:
+                logger.warning(f"IRCTC HTTP {resp.status_code}")
+                await asyncio.sleep(2 ** attempt)
+                continue
+
             data = resp.json()
-            
+
             if not isinstance(data, dict):
                 logger.warning(f"IRCTC trains search expected dict, got {type(data)}")
                 return []
@@ -86,7 +77,6 @@ async def _get_trains_impl(source: str, destination: str, date: str) -> List[Tra
                 for key, day_name in day_map.items():
                     if t.get(key) == "Y": days.append(day_name)
 
-                # Check if train is explicitly marked as NOT RUNNING on this specific date
                 if t.get('trainRunningOnDate') == 'N':
                     logger.warning(f"Train {t.get('trainNumber')} is NOT RUNNING on this date. Skipping.")
                     continue
@@ -98,8 +88,6 @@ async def _get_trains_impl(source: str, destination: str, date: str) -> List[Tra
                 except:
                     duration_mins = 0
 
-                # Parse which classes this train actually offers
-                # Use `or []` — key may be present with a null value, which .get(default) won't catch
                 raw_classes = t.get("avlClasses") or []
                 class_list = []
                 for c in raw_classes:
@@ -122,44 +110,24 @@ async def _get_trains_impl(source: str, destination: str, date: str) -> List[Tra
                 ))
             return results
         except Exception as e:
-            logger.warning(f"IRCTC trains search failed (Attempt {attempt + 1}): {e}")
+            logger.warning(f"IRCTC trains search failed (Attempt {attempt + 1}): {type(e).__name__}: {e}")
             await asyncio.sleep(2.0)
 
     return []
 
+
 async def get_train_schedule(train_number: str, date: Optional[str] = None, source: Optional[str] = "NDLS") -> List[StationStop]:
     """Verified schedule fetcher using dynamic date and starting station."""
-    try:
-        return await asyncio.wait_for(_get_schedule_impl(train_number, date, source), timeout=40.0)
-    except asyncio.TimeoutError:
-        logger.warning(f"Schedule fetch timeout for {train_number}")
-        return []
-
-async def _get_schedule_impl(train_number: str, date: Optional[str], source: Optional[str]) -> List[StationStop]:
-    """Implementation of schedule fetch with retry logic."""
     jrny_date = date.replace("-", "") if date else datetime.now().strftime("%Y%m%d")
     stn_code = source or "NDLS"
     url = f"https://www.irctc.co.in/eticketing/protected/mapps1/trnscheduleenquiry/{train_number}?journeyDate={jrny_date}&startingStationCode={stn_code}"
 
-    from scraper.irctc_scraper import IRCTCScraper
-    scraper = IRCTCScraper()
-
     try:
-        await scraper._ensure_session()
-        resp = await asyncio.wait_for(
-            _client.get(url, headers=_make_headers()),
-            timeout=10.0
-        )
+        resp = await _client.get(url, headers=_make_headers(), timeout=20)
 
-        if resp.status_code == 403:
-            scraper._initialized = False
-            await scraper._ensure_session()
-            resp = await asyncio.wait_for(
-                _client.get(url, headers=_make_headers()),
-                timeout=30.0
-            )
-
-        if resp.status_code != 200: return []
+        if resp.status_code != 200:
+            logger.warning(f"Schedule fetch HTTP {resp.status_code} for {train_number}")
+            return []
 
         data = resp.json()
         station_list = data.get("stationList", [])
@@ -181,7 +149,5 @@ async def _get_schedule_impl(train_number: str, date: Optional[str], source: Opt
             except: continue
         return stops
     except Exception as e:
-        logger.error(f"Schedule fetch failed: {e}")
+        logger.error(f"Schedule fetch failed: {type(e).__name__}: {e}")
     return []
-
-
