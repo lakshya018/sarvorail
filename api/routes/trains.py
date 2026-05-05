@@ -251,104 +251,133 @@ async def get_routes(
     direct_assembled = assemble_routes(direct_routes, direct_avail_lookup)
     direct_with_seats = [r for r in direct_assembled if r.is_fully_confirmed]
 
-    # ── Decision: if direct trains have seats, return ONLY direct trains ──────
+    # ── Decision: if direct trains with seats exist, return ONLY confirmed direct trains ──
     if direct_with_seats:
-        logger.info(f"✅ Found {len(direct_with_seats)} direct trains with seats. Skipping multi-leg search.")
-        final_routes = sorted(direct_assembled, key=lambda x: x.total_duration_minutes)[:20]
+        logger.info(f"✅ Found {len(direct_with_seats)} fully-confirmed direct trains. Skipping multi-leg search.")
+        final_routes = sorted(direct_with_seats, key=lambda x: x.total_duration_minutes)[:20]
         cache.set(full_cache_key, [r.dict() for r in final_routes], ttl_seconds=86400)
         duration_ms = (time.perf_counter() - search_start_time) * 1000
         logger.info(f"Search completed in {duration_ms:.0f}ms. Returning {len(final_routes)} direct routes.")
         return final_routes
 
-    # ── Step 2: No direct trains with seats — expand to multi-leg routes ──────
-    logger.info(f"⚠️  No direct trains with seats. Expanding to multi-leg search via intermediate junctions...")
+    # ── Step 2: No direct trains with seats — expand multi-leg in batches ─────
+    # Strategy: search via top 20 junctions, check for confirmed routes.
+    # If not enough confirmed routes (<5), expand to next 20 junctions, and so on.
+    # Goal: return ONLY fully-confirmed routes.
+    logger.info(f"⚠️  No direct trains with seats. Expanding to multi-leg search...")
 
-    intermediate_stations = get_candidate_stations(source, destination)
-    logger.info(f"Step 2: {len(intermediate_stations)} candidate junctions identified")
+    BATCH_SIZE = 20
+    MIN_CONFIRMED_TARGET = 5  # Stop expanding once we have at least this many confirmed routes
+    MAX_BATCHES = 5  # Don't expand forever (max 100 junctions)
 
-    # Fan out source→junction and junction→destination parallel calls
-    leg_tasks = []
-    for mid in intermediate_stations:
-        leg_tasks.append(get_trains_cached(source, mid, date_str))
-        leg_tasks.append(get_trains_cached(mid, destination, date_str))
+    all_trains_cumulative = list(direct_trains)
+    seen_train_keys = {f"{t.train_number}_{t.source_station}_{t.destination_station}" for t in direct_trains}
+    confirmed_routes = []
+    explored_junctions = set()
 
-    leg_results = await asyncio.gather(*leg_tasks, return_exceptions=True)
-    all_trains = list(direct_trains)
-    for res in leg_results:
-        if isinstance(res, list):
-            all_trains.extend(res)
+    for batch_idx in range(MAX_BATCHES):
+        offset = batch_idx * BATCH_SIZE
+        batch_junctions = get_candidate_stations(source, destination, limit=BATCH_SIZE, offset=offset)
 
-    # Deduplicate
-    unique_trains_map = {f"{t.train_number}_{t.source_station}_{t.destination_station}": t for t in all_trains}
-    unique_trains = list(unique_trains_map.values())
-    train_class_map = {t.train_number: t.class_list for t in unique_trains if t.class_list}
-    logger.info(f"Step 3: Built graph with {len(unique_trains)} unique train segments")
+        # Filter out already-explored junctions
+        batch_junctions = [j for j in batch_junctions if j not in explored_junctions]
+        if not batch_junctions:
+            logger.info(f"Batch {batch_idx + 1}: no new junctions. Stopping expansion.")
+            break
 
-    # Build graph and find routes (allowing multi-leg now)
-    graph = RouteGraph()
-    graph.build_graph(unique_trains)
-    routes = graph.find_routes(source, destination, constraints, date_str)
-    logger.info(f"Step 4: Discovered {len(routes)} candidate routes")
+        explored_junctions.update(batch_junctions)
+        logger.info(f"Batch {batch_idx + 1}: searching via {len(batch_junctions)} junctions (cumulative: {len(explored_junctions)})")
 
-    # Fetch availability for all unique legs across all routes
-    unique_legs_map = {}
-    for route in routes:
-        for leg in route.legs:
-            key = (leg.train_number, leg.from_station, leg.to_station, leg.date)
-            if key not in unique_legs_map:
-                unique_legs_map[key] = leg
+        # Fan out source→junction and junction→destination calls for this batch
+        leg_tasks = []
+        for mid in batch_junctions:
+            leg_tasks.append(get_trains_cached(source, mid, date_str))
+            leg_tasks.append(get_trains_cached(mid, destination, date_str))
+        leg_results = await asyncio.gather(*leg_tasks, return_exceptions=True)
 
-    unique_keys = list(unique_legs_map.keys())
-    parallel_results = await asyncio.gather(
-        *[fetch_leg_availability(unique_legs_map[k], train_class_map, quota) for k in unique_keys],
-        return_exceptions=True
-    )
-    avail_lookup = {
-        k: (r if isinstance(r, list) else [])
-        for k, r in zip(unique_keys, parallel_results)
-    }
+        for res in leg_results:
+            if isinstance(res, list):
+                for t in res:
+                    key = f"{t.train_number}_{t.source_station}_{t.destination_station}"
+                    if key not in seen_train_keys:
+                        seen_train_keys.add(key)
+                        all_trains_cumulative.append(t)
 
-    assembled = assemble_routes(routes, avail_lookup)
+        train_class_map = {t.train_number: t.class_list for t in all_trains_cumulative if t.class_list}
+        logger.info(f"Batch {batch_idx + 1}: cumulative train segments = {len(all_trains_cumulative)}")
 
-    # Step 5: Boarding-point simplification for multi-leg routes
-    logger.info("Step 5: Checking for boarding-point simplification...")
+        # Build graph and find routes from cumulative train pool
+        graph = RouteGraph()
+        graph.build_graph(all_trains_cumulative)
+        routes = graph.find_routes(source, destination, constraints, date_str)
+        logger.info(f"Batch {batch_idx + 1}: discovered {len(routes)} candidate routes")
+
+        # Fetch availability for all unique legs (cached calls return instantly on repeat)
+        unique_legs_map = {}
+        for route in routes:
+            for leg in route.legs:
+                k = (leg.train_number, leg.from_station, leg.to_station, leg.date)
+                if k not in unique_legs_map:
+                    unique_legs_map[k] = leg
+
+        unique_keys = list(unique_legs_map.keys())
+        parallel_results = await asyncio.gather(
+            *[fetch_leg_availability(unique_legs_map[k], train_class_map, quota) for k in unique_keys],
+            return_exceptions=True
+        )
+        avail_lookup = {
+            k: (r if isinstance(r, list) else [])
+            for k, r in zip(unique_keys, parallel_results)
+        }
+
+        assembled = assemble_routes(routes, avail_lookup)
+
+        # Pick fully-confirmed routes only
+        confirmed_routes = [r for r in assembled if r.is_fully_confirmed]
+        logger.info(f"Batch {batch_idx + 1}: ✅ {len(confirmed_routes)} fully-confirmed routes so far")
+
+        # Stop if we have enough confirmed routes
+        if len(confirmed_routes) >= MIN_CONFIRMED_TARGET:
+            logger.info(f"Reached target of {MIN_CONFIRMED_TARGET} confirmed routes. Stopping expansion.")
+            break
+
+    # Step 3: Boarding-point simplification on confirmed multi-leg routes
+    logger.info("Step 3: Checking for boarding-point simplification...")
     simplified_routes = []
-    for route in assembled:
-        if route.connections > 0 and route.is_fully_confirmed:
+    for route in confirmed_routes:
+        if route.connections > 0:
             simp = await try_simplify_route(route, source)
             if simp:
                 simplified_routes.append(simp)
-    logger.info(f"Found {len(simplified_routes)} simplified routes")
 
-    # Combine: direct (even if no seats) + multi-leg + simplified
-    all_routes = direct_assembled + assembled + simplified_routes
+    # Combine confirmed routes + simplified versions
+    all_results = confirmed_routes + simplified_routes
 
     # Deduplicate by leg signature
     seen = set()
     deduped = []
-    for r in all_routes:
+    for r in all_results:
         sig = tuple((l.train_number, l.from_station, l.to_station) for l in r.legs)
         if sig not in seen:
             seen.add(sig)
             deduped.append(r)
 
-    # Filter out departed trains and apply only_confirmed
+    # Filter out departed trains
     final_routes = []
     for r in deduped:
         has_departed = any(any("DEPARTED" in _get_status(av) for av in leg.availability) for leg in r.legs)
         if has_departed:
             continue
-        if only_confirmed and not r.is_fully_confirmed:
-            continue
         final_routes.append(r)
 
-    # Sort: confirmed first, then by connections, then by duration
-    final_routes.sort(key=lambda x: (not x.is_fully_confirmed, x.connections, x.total_duration_minutes))
+    # Sort: fewer connections first, then shorter duration
+    final_routes.sort(key=lambda x: (x.connections, x.total_duration_minutes))
     final_routes = final_routes[:20]
 
     cache.set(full_cache_key, [r.dict() for r in final_routes], ttl_seconds=86400)
     duration_ms = (time.perf_counter() - search_start_time) * 1000
-    logger.info(f"Search completed in {duration_ms:.0f}ms. Found {len(final_routes)} routes (incl. multi-leg).")
+    confirmed_count = sum(1 for r in final_routes if r.is_fully_confirmed)
+    logger.info(f"Search completed in {duration_ms:.0f}ms. Found {len(final_routes)} routes ({confirmed_count} fully-confirmed).")
     return final_routes
 
 

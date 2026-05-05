@@ -44,7 +44,8 @@
       "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'{len\\(d\\)} trains found'\\); print\\('First train:', d[0]['train_name'] if d else 'none'\\)\")",
       "Bash(curl -v \"https://sarvorail-api.vercel.app/api/v1/trains?source=NDLS&destination=LKO&date=2026-05-08\" -m 60)",
       "Bash(python -c \"from curl_cffi import requests; help\\(requests.AsyncSession.__init__\\)\")",
-      "Bash(python -c ' *)"
+      "Bash(python -c ' *)",
+      "Bash(curl -s \"http://localhost:8000/api/v1/routes?source=JP&destination=PUNE&date=2026-06-15\" -m 60)"
     ]
   }
 }
