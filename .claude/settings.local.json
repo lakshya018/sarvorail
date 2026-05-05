@@ -34,7 +34,12 @@
       "Bash(curl -s \"http://localhost:8000/api/v1/trains?source=NDLS&destination=LKO&date=2026-05-06\" -m 30)",
       "Bash(curl -s \"http://localhost:8000/api/v1/routes?source=NDLS&destination=LKO&date=2026-05-06\" -m 60)",
       "Bash(time curl *)",
-      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'{len\\(d\\)} routes'\\)\")"
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'{len\\(d\\)} routes'\\)\")",
+      "Bash(python -c \"from curl_cffi import requests; print\\(dir\\(requests\\)\\)\")",
+      "Bash(python -c \"from curl_cffi import CurlHttpVersion; print\\(list\\(CurlHttpVersion\\)\\)\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/trains?source=NDLS&destination=LKO&date=2026-05-08\" -m 30)",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(f'{len\\(d\\)} trains found'\\)\")",
+      "Bash(curl -s \"http://localhost:8000/api/v1/routes?source=NDLS&destination=LKO&date=2026-05-08\" -m 60)"
     ]
   }
 }

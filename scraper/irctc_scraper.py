@@ -10,6 +10,7 @@ import re
 from typing import List, Optional
 from datetime import datetime
 from curl_cffi import requests as cffi_requests
+from curl_cffi import CurlHttpVersion
 
 from api.models import AvailabilityResult
 from config.settings import MAX_RETRIES
@@ -50,9 +51,11 @@ def _make_headers(referer: str = "https://www.irctc.co.in/nget/booking/train-lis
 
 
 # Shared async session with browser TLS fingerprint
+# Force HTTP/1.1 to avoid HTTP/2 stream errors on serverless platforms (Vercel)
 _client = cffi_requests.AsyncSession(
     impersonate=_IMPERSONATE,
     timeout=30,
+    http_version=CurlHttpVersion.V1_1,
 )
 
 _ALL_CLASSES = ["SL", "3A", "3E", "2A", "1A", "CC", "EC", "2S"]
