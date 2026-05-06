@@ -249,26 +249,18 @@ async def get_routes(
         direct_avail_lookup = {}
 
     direct_assembled = assemble_routes(direct_routes, direct_avail_lookup)
-    direct_with_seats = [r for r in direct_assembled if r.is_fully_confirmed]
+    direct_confirmed = [r for r in direct_assembled if r.is_fully_confirmed]
+    logger.info(f"Step 1: {len(direct_confirmed)} fully-confirmed direct trains")
 
-    # ── Decision: if direct trains with seats exist, return ONLY confirmed direct trains ──
-    if direct_with_seats:
-        logger.info(f"✅ Found {len(direct_with_seats)} fully-confirmed direct trains. Skipping multi-leg search.")
-        final_routes = sorted(direct_with_seats, key=lambda x: x.total_duration_minutes)[:20]
-        cache.set(full_cache_key, [r.dict() for r in final_routes], ttl_seconds=86400)
-        duration_ms = (time.perf_counter() - search_start_time) * 1000
-        logger.info(f"Search completed in {duration_ms:.0f}ms. Returning {len(final_routes)} direct routes.")
-        return final_routes
-
-    # ── Step 2: No direct trains with seats — expand multi-leg in batches ─────
-    # Strategy: search via top 20 junctions, check for confirmed routes.
-    # If not enough confirmed routes (<5), expand to next 20 junctions, and so on.
-    # Goal: return ONLY fully-confirmed routes.
-    logger.info(f"⚠️  No direct trains with seats. Expanding to multi-leg search...")
+    # ── Step 2: Always run multi-leg expansion (cap total at 20 results) ──────
+    # Direct trains alone may not fill 20 results, and users want connecting
+    # alternatives even when direct trains have seats. Search via junctions in
+    # batches; stop once we have enough total fully-confirmed routes.
+    logger.info("Step 2: Expanding to multi-leg search via intermediate junctions...")
 
     BATCH_SIZE = 20
-    MIN_CONFIRMED_TARGET = 5  # Stop expanding once we have at least this many confirmed routes
-    MAX_BATCHES = 5  # Don't expand forever (max 100 junctions)
+    TARGET_TOTAL = 20  # We want up to 20 results total (direct + multi-leg)
+    MAX_BATCHES = 5  # Hard cap on expansion (max 100 junctions)
 
     all_trains_cumulative = list(direct_trains)
     seen_train_keys = {f"{t.train_number}_{t.source_station}_{t.destination_station}" for t in direct_trains}
@@ -332,23 +324,23 @@ async def get_routes(
 
         assembled = assemble_routes(routes, avail_lookup)
 
-        # Pick fully-confirmed routes only
+        # Pick fully-confirmed routes only (includes direct + multi-leg from cumulative graph)
         confirmed_routes = [r for r in assembled if r.is_fully_confirmed]
-        logger.info(f"Batch {batch_idx + 1}: ✅ {len(confirmed_routes)} fully-confirmed routes so far")
+        logger.info(f"Batch {batch_idx + 1}: ✅ {len(confirmed_routes)} fully-confirmed routes total")
 
-        # Stop if we have enough confirmed routes
-        if len(confirmed_routes) >= MIN_CONFIRMED_TARGET:
-            logger.info(f"Reached target of {MIN_CONFIRMED_TARGET} confirmed routes. Stopping expansion.")
+        # Stop if we have enough confirmed routes to fill the page
+        if len(confirmed_routes) >= TARGET_TOTAL:
+            logger.info(f"Reached target of {TARGET_TOTAL} confirmed routes. Stopping expansion.")
             break
 
-    # Step 3: Boarding-point simplification on confirmed multi-leg routes
+    # Step 3: Boarding-point simplification — only top multi-leg routes, in parallel
     logger.info("Step 3: Checking for boarding-point simplification...")
-    simplified_routes = []
-    for route in confirmed_routes:
-        if route.connections > 0:
-            simp = await try_simplify_route(route, source)
-            if simp:
-                simplified_routes.append(simp)
+    multi_leg_top = [r for r in confirmed_routes if r.connections > 0][:10]
+    simp_results = await asyncio.gather(
+        *[try_simplify_route(r, source) for r in multi_leg_top],
+        return_exceptions=True
+    )
+    simplified_routes = [r for r in simp_results if isinstance(r, Route)]
 
     # Combine confirmed routes + simplified versions
     all_results = confirmed_routes + simplified_routes
